@@ -51,6 +51,18 @@ export default function App() {
     addLog('Aplicación inicializada correctamente.', 'info');
   }, []);
 
+  // --- Efecto global para cerrar modales con la tecla ESC ---
+  useEffect(() => {
+    const handleEscape = (e) => {
+      if (e.key === 'Escape') {
+        setShowAdminModal(false);
+        setShowLogsModal(false);
+      }
+    };
+    document.addEventListener('keydown', handleEscape);
+    return () => document.removeEventListener('keydown', handleEscape);
+  }, []);
+
   // --- Estados de Filtros y Ordenamiento ---
   const [searchTerm, setSearchTerm] = useState('');
   const [filterAsesor, setFilterAsesor] = useState('');
@@ -1238,51 +1250,59 @@ export default function App() {
         ============================================= */}
         {showAdminModal && (
           <div className="fixed inset-0 bg-zinc-900/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-            <div className="bg-white rounded-sm w-full max-w-xl shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200 border border-zinc-200">
+            <div className="bg-white rounded-sm w-full max-w-xl shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200 border border-zinc-200 flex flex-col max-h-[85vh]">
               
-              <div className="flex border-b border-zinc-200 bg-zinc-50 overflow-x-auto custom-scrollbar">
+              <div className="flex border-b border-zinc-200 bg-zinc-50 relative">
+                <div className="flex flex-1 overflow-x-auto custom-scrollbar">
+                  <button 
+                    onClick={() => setAdminTab('asesores')}
+                    className={`whitespace-nowrap flex-1 p-4 text-xs font-bold border-b-2 transition-colors ${adminTab === 'asesores' ? 'border-black text-black bg-white' : 'border-transparent text-zinc-400 hover:text-black'}`}
+                  >
+                    Asesores
+                  </button>
+                  <button 
+                    onClick={() => setAdminTab('lineas')}
+                    className={`whitespace-nowrap flex-1 p-4 text-xs font-bold border-b-2 transition-colors ${adminTab === 'lineas' ? 'border-black text-black bg-white' : 'border-transparent text-zinc-400 hover:text-black'}`}
+                  >
+                    Líneas de Interés
+                  </button>
+                  <button 
+                    onClick={() => setAdminTab('acciones')}
+                    className={`whitespace-nowrap flex-1 p-4 text-xs font-bold border-b-2 transition-colors ${adminTab === 'acciones' ? 'border-black text-black bg-white' : 'border-transparent text-zinc-400 hover:text-black'}`}
+                  >
+                    Acciones
+                  </button>
+                  <button 
+                    onClick={() => setAdminTab('fuentes')}
+                    className={`whitespace-nowrap flex-1 p-4 text-xs font-bold border-b-2 transition-colors ${adminTab === 'fuentes' ? 'border-black text-black bg-white' : 'border-transparent text-zinc-400 hover:text-black'}`}
+                  >
+                    Fuentes
+                  </button>
+                  <button 
+                    onClick={() => setAdminTab('campanias')}
+                    className={`whitespace-nowrap flex-1 p-4 text-xs font-bold border-b-2 transition-colors ${adminTab === 'campanias' ? 'border-black text-black bg-white' : 'border-transparent text-zinc-400 hover:text-black'}`}
+                  >
+                    Campañas
+                  </button>
+                  <button 
+                    onClick={() => setAdminTab('integracion')}
+                    className={`whitespace-nowrap flex-1 p-4 text-xs font-bold border-b-2 transition-colors ${adminTab === 'integracion' ? 'border-black text-black bg-white' : 'border-transparent text-zinc-400 hover:text-black'}`}
+                  >
+                    Integración (SP)
+                  </button>
+                </div>
+                
+                {/* Botón de Cerrar Fijo */}
                 <button 
-                  onClick={() => setAdminTab('asesores')}
-                  className={`whitespace-nowrap flex-1 p-4 text-xs font-bold border-b-2 transition-colors ${adminTab === 'asesores' ? 'border-black text-black bg-white' : 'border-transparent text-zinc-400 hover:text-black'}`}
+                  onClick={() => setShowAdminModal(false)} 
+                  className="p-4 text-zinc-500 hover:text-black transition-colors bg-white border-l border-zinc-200 shrink-0 z-10 drop-shadow-sm"
+                  title="Cerrar (ESC)"
                 >
-                  Asesores
-                </button>
-                <button 
-                  onClick={() => setAdminTab('lineas')}
-                  className={`whitespace-nowrap flex-1 p-4 text-xs font-bold border-b-2 transition-colors ${adminTab === 'lineas' ? 'border-black text-black bg-white' : 'border-transparent text-zinc-400 hover:text-black'}`}
-                >
-                  Líneas de Interés
-                </button>
-                <button 
-                  onClick={() => setAdminTab('acciones')}
-                  className={`whitespace-nowrap flex-1 p-4 text-xs font-bold border-b-2 transition-colors ${adminTab === 'acciones' ? 'border-black text-black bg-white' : 'border-transparent text-zinc-400 hover:text-black'}`}
-                >
-                  Acciones
-                </button>
-                <button 
-                  onClick={() => setAdminTab('fuentes')}
-                  className={`whitespace-nowrap flex-1 p-4 text-xs font-bold border-b-2 transition-colors ${adminTab === 'fuentes' ? 'border-black text-black bg-white' : 'border-transparent text-zinc-400 hover:text-black'}`}
-                >
-                  Fuentes
-                </button>
-                <button 
-                  onClick={() => setAdminTab('campanias')}
-                  className={`whitespace-nowrap flex-1 p-4 text-xs font-bold border-b-2 transition-colors ${adminTab === 'campanias' ? 'border-black text-black bg-white' : 'border-transparent text-zinc-400 hover:text-black'}`}
-                >
-                  Campañas
-                </button>
-                <button 
-                  onClick={() => setAdminTab('integracion')}
-                  className={`whitespace-nowrap flex-1 p-4 text-xs font-bold border-b-2 transition-colors ${adminTab === 'integracion' ? 'border-black text-black bg-white' : 'border-transparent text-zinc-400 hover:text-black'}`}
-                >
-                  Integración (SP)
-                </button>
-                <button onClick={() => setShowAdminModal(false)} className="p-4 text-zinc-400 hover:text-black transition-colors bg-white border-l border-zinc-200">
                   <X size={18} />
                 </button>
               </div>
               
-              <div className="p-7">
+              <div className="p-7 overflow-y-auto flex-1 custom-scrollbar">
                 {/* TAB ASESORES */}
                 {adminTab === 'asesores' && (
                   <div className="animate-in fade-in">
@@ -1297,7 +1317,7 @@ export default function App() {
                         <UserPlus size={16} /> Agregar
                       </button>
                     </div>
-                    <div className="max-h-60 overflow-y-auto space-y-2 pr-2 custom-scrollbar">
+                    <div className="space-y-2 pr-2">
                       {asesoresList.map(asesor => (
                         <div key={asesor} className="flex items-center justify-between bg-white border border-zinc-200 p-3.5 rounded-sm hover:border-black transition-colors">
                           <span className="text-sm font-bold text-black">{asesor}</span>
@@ -1322,7 +1342,7 @@ export default function App() {
                         <Layers size={16} /> Agregar
                       </button>
                     </div>
-                    <div className="max-h-60 overflow-y-auto space-y-2 pr-2 custom-scrollbar">
+                    <div className="space-y-2 pr-2">
                       {lineasList.map(linea => (
                         <div key={linea} className="flex items-center justify-between bg-white border border-zinc-200 p-3.5 rounded-sm hover:border-black transition-colors">
                           <span className="text-sm font-bold text-black">{linea}</span>
@@ -1347,7 +1367,7 @@ export default function App() {
                         <Activity size={16} /> Agregar
                       </button>
                     </div>
-                    <div className="max-h-60 overflow-y-auto space-y-2 pr-2 custom-scrollbar">
+                    <div className="space-y-2 pr-2">
                       {accionesList.map(accion => (
                         <div key={accion} className="flex items-center justify-between bg-white border border-zinc-200 p-3.5 rounded-sm hover:border-black transition-colors">
                           <span className="text-sm font-bold text-black">{accion}</span>
@@ -1372,7 +1392,7 @@ export default function App() {
                         <Globe size={16} /> Agregar
                       </button>
                     </div>
-                    <div className="max-h-60 overflow-y-auto space-y-2 pr-2 custom-scrollbar">
+                    <div className="space-y-2 pr-2">
                       {fuentesList.map(fuente => (
                         <div key={fuente} className="flex items-center justify-between bg-white border border-zinc-200 p-3.5 rounded-sm hover:border-black transition-colors">
                           <span className="text-sm font-bold text-black">{fuente}</span>
@@ -1397,7 +1417,7 @@ export default function App() {
                         <Megaphone size={16} /> Agregar
                       </button>
                     </div>
-                    <div className="max-h-60 overflow-y-auto space-y-2 pr-2 custom-scrollbar">
+                    <div className="space-y-2 pr-2">
                       {campaniasList.map(campania => (
                         <div key={campania} className="flex items-center justify-between bg-white border border-zinc-200 p-3.5 rounded-sm hover:border-black transition-colors">
                           <span className="text-sm font-bold text-black">{campania}</span>
