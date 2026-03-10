@@ -235,6 +235,7 @@ export default function App() {
 
   const convertFilesToBase64 = async (files) => {
     const promises = files.map(file => {
+      // Si el archivo ya es un link o ya fue procesado, se omite (esto pasa al editar)
       if (!file.type && file.contentBytes) return Promise.resolve(file);
       if (!file.name) return Promise.resolve(null);
 
@@ -254,6 +255,7 @@ export default function App() {
     setFormData({
       ...initialState, // Asegurar estructura
       ...lead,
+      // Aseguramos que los adjuntos locales funcionen (generalmente no se pueden recargar inputs de tipo file, así que limpiamos o mantenemos info referencial)
       datos_adjuntos: lead.datos_adjuntos || [] 
     });
     setCurrentView('form');
@@ -291,7 +293,7 @@ export default function App() {
         if (paConfig.urlPut) {
           addLog('Enviando solicitud de ACTUALIZACIÓN a Power Automate...', 'info');
           await fetch(paConfig.urlPut, {
-            method: 'POST', 
+            method: 'POST', // Usamos POST para mayor compatibilidad con HTTP Trigger de PA, enviando el ID en el payload
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(payload)
           });
@@ -300,6 +302,7 @@ export default function App() {
           addLog('Registro actualizado localmente (Falta URL de actualización).', 'warning');
         }
         
+        // Actualizar en el estado local
         setSavedLeads(prev => prev.map(lead => lead.id === editingLeadId ? { ...payload, id: editingLeadId } : lead));
         
       } else {
@@ -315,9 +318,11 @@ export default function App() {
         } else {
           addLog('Registro guardado localmente (Sin URL de SP configurada).', 'warning');
         }
+        // Guardar en el estado local
         setSavedLeads([{ ...payload, id: Date.now() }, ...savedLeads]);
       }
 
+      // Recordatorio local
       if (formData.programar_recordatorio && formData.fecha_seguimiento_dia) {
         const timeString = formData.hora_seguimiento || '00:00';
         const fechaSeg = new Date(`${formData.fecha_seguimiento_dia}T${timeString}:00`);
@@ -378,7 +383,7 @@ export default function App() {
     }
   }, [currentView]);
 
-  // --- Funciones para Filtrar y Ordenar (Tabla) ---
+  // --- Funciones para Filtrar y Ordenar ---
   const requestSort = (key) => {
     let direction = 'ascending';
     if (sortConfig && sortConfig.key === key && sortConfig.direction === 'ascending') {
@@ -390,6 +395,7 @@ export default function App() {
   const filteredAndSortedLeads = useMemo(() => {
     let items = [...savedLeads];
 
+    // Aplicar búsqueda de texto
     if (searchTerm) {
       const lowerSearch = searchTerm.toLowerCase();
       items = items.filter(lead => 
@@ -399,18 +405,22 @@ export default function App() {
       );
     }
 
+    // Aplicar Filtro de Mes
     if (filterMes) {
       items = items.filter(lead => lead.fecha_ingreso && lead.fecha_ingreso.startsWith(filterMes));
     }
 
+    // Aplicar filtros desplegables
     if (filterAsesor) items = items.filter(lead => lead.asesor === filterAsesor);
     if (filterEstado) items = items.filter(lead => lead.estado === filterEstado);
 
+    // Aplicar ordenamiento
     if (sortConfig !== null) {
       items.sort((a, b) => {
         let aValue = a[sortConfig.key] || '';
         let bValue = b[sortConfig.key] || '';
 
+        // Manejo especial para números (Tiempo de Respuesta)
         if (sortConfig.key === 'tiempo_respuesta_hrs') {
           aValue = parseFloat(aValue) || 0;
           bValue = parseFloat(bValue) || 0;
@@ -427,16 +437,10 @@ export default function App() {
 
   // --- LÓGICA DE REPORTES ---
   const reportes = useMemo(() => {
+    // Filtramos la lista basándonos en el mes seleccionado antes de calcular KPIs
     let itemsForReports = savedLeads;
-    
-    // Filtrar por mes (Global compartido con la vista de Datos)
     if (filterMes) {
       itemsForReports = itemsForReports.filter(lead => lead.fecha_ingreso && lead.fecha_ingreso.startsWith(filterMes));
-    }
-    
-    // Filtrar por Calificación (Exclusivo de la vista de Reportes)
-    if (reportFilterCalificacion) {
-      itemsForReports = itemsForReports.filter(lead => lead.calificacion_lead === reportFilterCalificacion);
     }
 
     const total = itemsForReports.length;
@@ -502,7 +506,7 @@ export default function App() {
       total, potenciales, calificados, noCalificados, ventasCerradas, efectividadPorcentaje,
       organicos, pauta, finDeSemana, fueraHorario, calificacionCount, lineasCount
     };
-  }, [savedLeads, filterMes, reportFilterCalificacion]);
+  }, [savedLeads, filterMes]);
 
   return (
     <div className="min-h-screen bg-[#F8F9FA] text-zinc-900 p-4 md:p-8 font-sans selection:bg-zinc-300">
@@ -519,8 +523,7 @@ export default function App() {
                 onError={(e) => {
                   e.target.onerror = null; 
                   e.target.style.display = 'none';
-                  const fallback = document.getElementById('fallback-logo');
-                  if (fallback) fallback.style.display = 'flex';
+                  document.getElementById('fallback-logo').style.display = 'flex';
                 }}
               />
               <div id="fallback-logo" className="hidden flex-col justify-center">
@@ -643,21 +646,11 @@ export default function App() {
                   </div>
                   <div>
                     <label className="block text-xs font-bold text-zinc-600 mb-2">Fuente / Medio</label>
-                    <select name="fuente_medio" value={formData.fuente_medio} onChange={handleChange} className="w-full rounded-sm border-zinc-300 border p-3 text-sm focus:ring-1 focus:ring-black focus:border-black outline-none bg-zinc-50 focus:bg-white transition-colors cursor-pointer">
-                      <option value="">Seleccione...</option>
-                      {fuentesList.map(fuente => (
-                        <option key={fuente} value={fuente}>{fuente}</option>
-                      ))}
-                    </select>
+                    <input type="text" name="fuente_medio" value={formData.fuente_medio} onChange={handleChange} className="w-full rounded-sm border-zinc-300 border p-3 text-sm focus:ring-1 focus:ring-black focus:border-black outline-none bg-zinc-50 focus:bg-white transition-colors" placeholder="Ej. Orgánico, Instagram..." />
                   </div>
                   <div>
                     <label className="block text-xs font-bold text-zinc-600 mb-2">Campaña</label>
-                    <select name="campania" value={formData.campania} onChange={handleChange} className="w-full rounded-sm border-zinc-300 border p-3 text-sm focus:ring-1 focus:ring-black focus:border-black outline-none bg-zinc-50 focus:bg-white transition-colors cursor-pointer">
-                      <option value="">Seleccione...</option>
-                      {campaniasList.map(campania => (
-                        <option key={campania} value={campania}>{campania}</option>
-                      ))}
-                    </select>
+                    <input type="text" name="campania" value={formData.campania} onChange={handleChange} className="w-full rounded-sm border-zinc-300 border p-3 text-sm focus:ring-1 focus:ring-black focus:border-black outline-none bg-zinc-50 focus:bg-white transition-colors" />
                   </div>
                   <div className="md:col-span-2 border-t border-zinc-100 pt-3">
                     <label className="block text-xs font-bold text-zinc-600 mb-2">Línea de Interés</label>
@@ -999,10 +992,10 @@ export default function App() {
                             <span className="text-zinc-400">-</span>
                           )}
                         </td>
-                        <td className="p-4 text-center border-l border-zinc-100 bg-white group-hover:bg-zinc-50">
+                        <td className="p-4 text-center border-l border-zinc-200 bg-zinc-50 group-hover:bg-zinc-100 transition-colors">
                           <button 
                             onClick={() => handleEditLead(lead)} 
-                            className="p-2 text-zinc-400 hover:text-black hover:bg-zinc-100 rounded-sm transition-colors"
+                            className="p-2 text-zinc-500 hover:text-black hover:bg-white border border-transparent hover:border-zinc-300 hover:shadow-sm rounded-sm transition-all"
                             title="Editar Registro"
                           >
                             <Edit2 size={16} />
