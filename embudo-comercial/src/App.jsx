@@ -68,6 +68,8 @@ export default function App() {
   const [filterAsesor, setFilterAsesor] = useState('');
   const [filterEstado, setFilterEstado] = useState('');
   const [filterMes, setFilterMes] = useState(''); // Filtro por mes (YYYY-MM)
+  const [filterFuente, setFilterFuente] = useState(''); // Filtro por fuente
+  const [filterCampania, setFilterCampania] = useState(''); // Filtro por campaña
   const [reportFilterCalificacion, setReportFilterCalificacion] = useState(''); // Nuevo filtro de reportes
   const [sortConfig, setSortConfig] = useState({ key: 'fecha_ingreso', direction: 'descending' });
 
@@ -413,6 +415,8 @@ export default function App() {
     // Aplicar filtros desplegables
     if (filterAsesor) items = items.filter(lead => lead.asesor === filterAsesor);
     if (filterEstado) items = items.filter(lead => lead.estado === filterEstado);
+    if (filterFuente) items = items.filter(lead => lead.fuente_medio === filterFuente);
+    if (filterCampania) items = items.filter(lead => lead.campania === filterCampania);
 
     // Aplicar ordenamiento
     if (sortConfig !== null) {
@@ -646,11 +650,21 @@ export default function App() {
                   </div>
                   <div>
                     <label className="block text-xs font-bold text-zinc-600 mb-2">Fuente / Medio</label>
-                    <input type="text" name="fuente_medio" value={formData.fuente_medio} onChange={handleChange} className="w-full rounded-sm border-zinc-300 border p-3 text-sm focus:ring-1 focus:ring-black focus:border-black outline-none bg-zinc-50 focus:bg-white transition-colors" placeholder="Ej. Orgánico, Instagram..." />
+                    <select name="fuente_medio" value={formData.fuente_medio} onChange={handleChange} className="w-full rounded-sm border-zinc-300 border p-3 text-sm focus:ring-1 focus:ring-black focus:border-black outline-none bg-zinc-50 focus:bg-white transition-colors cursor-pointer">
+                      <option value="">Seleccione...</option>
+                      {fuentesList.map(fuente => (
+                        <option key={fuente} value={fuente}>{fuente}</option>
+                      ))}
+                    </select>
                   </div>
                   <div>
                     <label className="block text-xs font-bold text-zinc-600 mb-2">Campaña</label>
-                    <input type="text" name="campania" value={formData.campania} onChange={handleChange} className="w-full rounded-sm border-zinc-300 border p-3 text-sm focus:ring-1 focus:ring-black focus:border-black outline-none bg-zinc-50 focus:bg-white transition-colors" />
+                    <select name="campania" value={formData.campania} onChange={handleChange} className="w-full rounded-sm border-zinc-300 border p-3 text-sm focus:ring-1 focus:ring-black focus:border-black outline-none bg-zinc-50 focus:bg-white transition-colors cursor-pointer">
+                      <option value="">Seleccione...</option>
+                      {campaniasList.map(campania => (
+                        <option key={campania} value={campania}>{campania}</option>
+                      ))}
+                    </select>
                   </div>
                   <div className="md:col-span-2 border-t border-zinc-100 pt-3">
                     <label className="block text-xs font-bold text-zinc-600 mb-2">Línea de Interés</label>
@@ -880,6 +894,16 @@ export default function App() {
                   )}
                 </div>
 
+                <select value={filterFuente} onChange={e => setFilterFuente(e.target.value)} className="p-2.5 text-xs font-medium border border-zinc-300 rounded-sm focus:border-black outline-none cursor-pointer bg-white">
+                  <option value="">Todas las fuentes</option>
+                  {fuentesList.map(f => <option key={f} value={f}>{f}</option>)}
+                </select>
+
+                <select value={filterCampania} onChange={e => setFilterCampania(e.target.value)} className="p-2.5 text-xs font-medium border border-zinc-300 rounded-sm focus:border-black outline-none cursor-pointer bg-white">
+                  <option value="">Todas las campañas</option>
+                  {campaniasList.map(c => <option key={c} value={c}>{c}</option>)}
+                </select>
+
                 <select value={filterAsesor} onChange={e => setFilterAsesor(e.target.value)} className="p-2.5 text-xs font-medium border border-zinc-300 rounded-sm focus:border-black outline-none cursor-pointer bg-white">
                   <option value="">Todos los asesores</option>
                   {asesoresList.map(a => <option key={a} value={a}>{a}</option>)}
@@ -947,7 +971,7 @@ export default function App() {
                   {filteredAndSortedLeads.length === 0 ? (
                     <tr>
                       <td colSpan="13" className="p-16 text-center text-zinc-500 text-sm">
-                        {isLoadingData ? 'Cargando datos desde SharePoint...' : searchTerm || filterAsesor || filterEstado || filterMes ? 'No se encontraron resultados para los filtros actuales.' : 'No hay datos registrados.'}
+                        {isLoadingData ? 'Cargando datos desde SharePoint...' : searchTerm || filterAsesor || filterEstado || filterMes || filterFuente || filterCampania ? 'No se encontraron resultados para los filtros actuales.' : 'No hay datos registrados.'}
                       </td>
                     </tr>
                   ) : (
