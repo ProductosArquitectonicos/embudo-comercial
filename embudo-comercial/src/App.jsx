@@ -437,14 +437,21 @@ export default function App() {
     }
 
     return items;
-  }, [savedLeads, searchTerm, filterMes, filterAsesor, filterEstado, sortConfig]);
+  }, [savedLeads, searchTerm, filterMes, filterAsesor, filterEstado, filterFuente, filterCampania, sortConfig]);
 
   // --- LÓGICA DE REPORTES ---
   const reportes = useMemo(() => {
     // Filtramos la lista basándonos en el mes seleccionado antes de calcular KPIs
     let itemsForReports = savedLeads;
+    
+    // Filtrar por mes (Global compartido con la vista de Datos)
     if (filterMes) {
       itemsForReports = itemsForReports.filter(lead => lead.fecha_ingreso && lead.fecha_ingreso.startsWith(filterMes));
+    }
+    
+    // Filtrar por Calificación (Exclusivo de la vista de Reportes)
+    if (reportFilterCalificacion) {
+      itemsForReports = itemsForReports.filter(lead => lead.calificacion_lead === reportFilterCalificacion);
     }
 
     const total = itemsForReports.length;
@@ -510,7 +517,7 @@ export default function App() {
       total, potenciales, calificados, noCalificados, ventasCerradas, efectividadPorcentaje,
       organicos, pauta, finDeSemana, fueraHorario, calificacionCount, lineasCount
     };
-  }, [savedLeads, filterMes]);
+  }, [savedLeads, filterMes, reportFilterCalificacion]);
 
   return (
     <div className="min-h-screen bg-[#F8F9FA] text-zinc-900 p-4 md:p-8 font-sans selection:bg-zinc-300">
@@ -527,7 +534,8 @@ export default function App() {
                 onError={(e) => {
                   e.target.onerror = null; 
                   e.target.style.display = 'none';
-                  document.getElementById('fallback-logo').style.display = 'flex';
+                  const fallback = document.getElementById('fallback-logo');
+                  if (fallback) fallback.style.display = 'flex';
                 }}
               />
               <div id="fallback-logo" className="hidden flex-col justify-center">
@@ -703,7 +711,12 @@ export default function App() {
                   </div>
                   <div>
                     <label className="block text-xs font-bold text-zinc-600 mb-2">Novedad Tiempo</label>
-                    <input type="text" name="novedad_tiempo" value={formData.novedad_tiempo} onChange={handleChange} className="w-full rounded-sm border-zinc-300 border p-3 text-sm focus:ring-1 focus:ring-black focus:border-black outline-none bg-zinc-50 focus:bg-white transition-colors" />
+                    <select name="novedad_tiempo" value={formData.novedad_tiempo} onChange={handleChange} className="w-full rounded-sm border-zinc-300 border p-3 text-sm focus:ring-1 focus:ring-black focus:border-black outline-none bg-zinc-50 focus:bg-white transition-colors cursor-pointer">
+                      <option value="">Seleccione...</option>
+                      <option value="Ninguno">Ninguno</option>
+                      <option value="Fuera de Horario">Fuera de Horario</option>
+                      <option value="Fin de semana">Fin de semana</option>
+                    </select>
                   </div>
                   <div>
                     <label className="block text-xs font-bold text-zinc-600 mb-2">Asesor Asignado</label>
