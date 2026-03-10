@@ -5,12 +5,13 @@ import {
   Star, Bell, X, Settings, Trash2, UserPlus,
   TableProperties, FilePlus2, RefreshCw, Loader2, Database,
   BarChart3, Target, TrendingUp, CalendarX, Moon, Layers, Activity,
-  Search, Filter, ChevronUp, ChevronDown, Terminal
+  Search, Filter, ChevronUp, ChevronDown, Terminal, Edit2
 } from 'lucide-react';
 
 export default function App() {
   // Estado inicial del formulario
   const initialState = {
+    id: '', // Se usa para la actualización
     titulo: '', fecha_ingreso: '', fecha_control: '',
     tiempo_respuesta_hrs: '', novedad_tiempo: '',
     fuente_medio: '', campania: '', celular: '', email: '',
@@ -33,6 +34,7 @@ export default function App() {
   const [currentView, setCurrentView] = useState('form'); // 'form' | 'data' | 'reports'
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isLoadingData, setIsLoadingData] = useState(false);
+  const [editingLeadId, setEditingLeadId] = useState(null); // Estado para saber si estamos editando
 
   // --- Logs del Sistema ---
   const [appLogs, setAppLogs] = useState([]);
@@ -87,7 +89,8 @@ export default function App() {
   
   const [paConfig, setPaConfig] = useState({
     urlPost: localStorage.getItem('pa_url_post') || DEFAULT_POST_URL,
-    urlGet: localStorage.getItem('pa_url_get') || DEFAULT_GET_URL
+    urlGet: localStorage.getItem('pa_url_get') || DEFAULT_GET_URL,
+    urlPut: localStorage.getItem('pa_url_put') || '' // Nueva URL para actualizar
   });
   const [saveConfigSuccess, setSaveConfigSuccess] = useState(false);
 
@@ -99,6 +102,7 @@ export default function App() {
   const handleSaveConfig = () => {
     localStorage.setItem('pa_url_post', paConfig.urlPost);
     localStorage.setItem('pa_url_get', paConfig.urlGet);
+    localStorage.setItem('pa_url_put', paConfig.urlPut);
     setSaveConfigSuccess(true);
     addLog('Configuración de URLs guardada localmente.', 'success');
     setTimeout(() => {
@@ -106,7 +110,7 @@ export default function App() {
     }, 3000);
   };
 
-  // Funciones Asesores
+  // Funciones Asesores, Líneas, Acciones
   const handleAddAsesor = () => {
     if (newAsesorName.trim() && !asesoresList.includes(newAsesorName.trim())) {
       setAsesoresList([...asesoresList, newAsesorName.trim()]);
@@ -116,12 +120,9 @@ export default function App() {
 
   const handleRemoveAsesor = (asesorToRemove) => {
     setAsesoresList(asesoresList.filter(a => a !== asesorToRemove));
-    if (formData.asesor === asesorToRemove) {
-      setFormData(prev => ({ ...prev, asesor: '' }));
-    }
+    if (formData.asesor === asesorToRemove) setFormData(prev => ({ ...prev, asesor: '' }));
   };
 
-  // Funciones Líneas de Interés
   const handleAddLinea = () => {
     if (newLineaName.trim() && !lineasList.includes(newLineaName.trim())) {
       const newList = [...lineasList, newLineaName.trim()].sort((a, b) => a.localeCompare(b));
@@ -132,12 +133,9 @@ export default function App() {
 
   const handleRemoveLinea = (lineaToRemove) => {
     setLineasList(lineasList.filter(l => l !== lineaToRemove));
-    if (formData.linea_interes === lineaToRemove) {
-      setFormData(prev => ({ ...prev, linea_interes: '' }));
-    }
+    if (formData.linea_interes === lineaToRemove) setFormData(prev => ({ ...prev, linea_interes: '' }));
   };
 
-  // Funciones Acciones
   const handleAddAccion = () => {
     if (newAccionName.trim() && !accionesList.includes(newAccionName.trim())) {
       const newList = [...accionesList, newAccionName.trim()].sort((a, b) => a.localeCompare(b));
@@ -148,9 +146,7 @@ export default function App() {
 
   const handleRemoveAccion = (accionToRemove) => {
     setAccionesList(accionesList.filter(a => a !== accionToRemove));
-    if (formData.accion === accionToRemove) {
-      setFormData(prev => ({ ...prev, accion: '' }));
-    }
+    if (formData.accion === accionToRemove) setFormData(prev => ({ ...prev, accion: '' }));
   };
 
   // Efecto: Cálculo de tiempo de respuesta
@@ -176,7 +172,7 @@ export default function App() {
 
   const handleFileChange = (e) => {
     const files = Array.from(e.target.files);
-    setFormData(prev => ({ ...prev, datos_adjuntos: [...prev.datos_adjuntos, ...files] }));
+    setFormData(prev => ({ ...prev, datos_adjuntos: [...(prev.datos_adjuntos || []), ...files] }));
   };
 
   const removeFile = (indexToRemove) => {
@@ -187,25 +183,51 @@ export default function App() {
 
   const convertFilesToBase64 = async (files) => {
     const promises = files.map(file => {
+      // Si el archivo ya es un link o ya fue procesado, se omite (esto pasa al editar)
+      if (!file.type && file.contentBytes) return Promise.resolve(file);
+      if (!file.name) return Promise.resolve(null);
+
       return new Promise((resolve) => {
         const reader = new FileReader();
         reader.onload = (e) => resolve({ name: file.name, type: file.type, contentBytes: e.target.result.split(',')[1] });
         reader.readAsDataURL(file);
       });
     });
-    return Promise.all(promises);
+    const results = await Promise.all(promises);
+    return results.filter(r => r !== null);
   };
 
+  // Cargar datos en el formulario para editar
+  const handleEditLead = (lead) => {
+    setEditingLeadId(lead.id);
+    setFormData({
+      ...initialState, // Asegurar estructura
+      ...lead,
+      // Aseguramos que los adjuntos locales funcionen (generalmente no se pueden recargar inputs de tipo file, así que limpiamos o mantenemos info referencial)
+      datos_adjuntos: lead.datos_adjuntos || [] 
+    });
+    setCurrentView('form');
+    addLog(`Cargando registro [${lead.titulo || lead.id}] para edición.`, 'info');
+  };
+
+  const handleCancelEdit = () => {
+    setEditingLeadId(null);
+    setFormData(initialState);
+    setCurrentView('data');
+    addLog('Edición cancelada.', 'warning');
+  };
+
+  // Enviar / Actualizar Datos
   const handleSubmit = async (e) => {
     e.preventDefault();
     setIsSubmitting(true);
-    addLog('Procesando formulario para enviar...', 'info');
+    addLog(editingLeadId ? 'Procesando actualización de formulario...' : 'Procesando nuevo formulario...', 'info');
 
     try {
       let adjuntosBase64 = [];
-      if (formData.datos_adjuntos.length > 0) {
+      if (formData.datos_adjuntos && formData.datos_adjuntos.length > 0) {
         adjuntosBase64 = await convertFilesToBase64(formData.datos_adjuntos);
-        addLog(`${adjuntosBase64.length} archivo(s) procesados a Base64.`, 'info');
+        addLog(`${adjuntosBase64.length} archivo(s) procesados.`, 'info');
       }
 
       const payload = {
@@ -214,18 +236,41 @@ export default function App() {
         fecha_registro_sistema: new Date().toISOString()
       };
 
-      if (paConfig.urlPost) {
-        addLog('Enviando solicitud POST a Power Automate...', 'info');
-        await fetch(paConfig.urlPost, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(payload)
-        });
-        addLog('Registro guardado y enviado a SharePoint exitosamente.', 'success');
+      if (editingLeadId) {
+        // LÓGICA DE ACTUALIZACIÓN (PUT/PATCH)
+        if (paConfig.urlPut) {
+          addLog('Enviando solicitud de ACTUALIZACIÓN a Power Automate...', 'info');
+          await fetch(paConfig.urlPut, {
+            method: 'POST', // Usamos POST para mayor compatibilidad con HTTP Trigger de PA, enviando el ID en el payload
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+          });
+          addLog('Registro actualizado en SharePoint exitosamente.', 'success');
+        } else {
+          addLog('Registro actualizado localmente (Falta URL de actualización).', 'warning');
+        }
+        
+        // Actualizar en el estado local
+        setSavedLeads(prev => prev.map(lead => lead.id === editingLeadId ? { ...payload, id: editingLeadId } : lead));
+        
       } else {
-        addLog('Registro guardado localmente (Sin URL de SP configurada).', 'warning');
+        // LÓGICA DE CREACIÓN (POST)
+        if (paConfig.urlPost) {
+          addLog('Enviando solicitud POST a Power Automate...', 'info');
+          await fetch(paConfig.urlPost, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+          });
+          addLog('Registro guardado y enviado a SharePoint exitosamente.', 'success');
+        } else {
+          addLog('Registro guardado localmente (Sin URL de SP configurada).', 'warning');
+        }
+        // Guardar en el estado local
+        setSavedLeads([{ ...payload, id: Date.now() }, ...savedLeads]);
       }
 
+      // Recordatorio local
       if (formData.programar_recordatorio && formData.fecha_seguimiento_dia) {
         const timeString = formData.hora_seguimiento || '00:00';
         const fechaSeg = new Date(`${formData.fecha_seguimiento_dia}T${timeString}:00`);
@@ -238,9 +283,9 @@ export default function App() {
         addLog(`Recordatorio programado para ${fechaSeg.toLocaleString()}`, 'info');
       }
       
-      setSavedLeads([{ ...formData, id: Date.now() }, ...savedLeads]);
       setShowSuccess(true);
       setFormData(initialState);
+      setEditingLeadId(null);
       
       setTimeout(() => {
         setShowSuccess(false);
@@ -248,9 +293,9 @@ export default function App() {
       }, 5000);
 
     } catch (error) {
-      console.error("Error al enviar a Power Automate:", error);
-      addLog(`Fallo al enviar datos: ${error.message}`, 'error');
-      alert("Hubo un error al enviar los datos a Power Automate. Revisa la consola o la URL configurada.");
+      console.error("Error al procesar:", error);
+      addLog(`Fallo al procesar datos: ${error.message}`, 'error');
+      alert(`Hubo un error al ${editingLeadId ? 'actualizar' : 'enviar'} los datos. Revisa los logs o la URL.`);
     } finally {
       setIsSubmitting(false);
     }
@@ -432,10 +477,13 @@ export default function App() {
             {/* Pestañas de Navegación */}
             <div className="flex bg-zinc-100 p-1 rounded-sm w-full lg:w-auto border border-zinc-200">
               <button 
-                onClick={() => setCurrentView('form')}
+                onClick={() => {
+                  setCurrentView('form');
+                  if(!editingLeadId) setFormData(initialState);
+                }}
                 className={`flex-1 lg:flex-none flex items-center justify-center gap-2 px-5 py-2 rounded-sm font-bold text-sm transition-all ${currentView === 'form' ? 'bg-black shadow-sm text-white' : 'text-zinc-500 hover:text-black'}`}
               >
-                <FilePlus2 size={16} /> Nuevo
+                <FilePlus2 size={16} /> {editingLeadId ? 'Editar' : 'Nuevo'}
               </button>
               <button 
                 onClick={() => setCurrentView('data')}
@@ -476,7 +524,9 @@ export default function App() {
           <div className="space-y-2 animate-in slide-in-from-top-2">
             <div className="bg-black text-white p-4 rounded-sm border-l-4 border-zinc-400 flex items-center gap-3 shadow-lg">
               <CheckCircle size={20} className="text-zinc-300" />
-              <span className="text-sm font-medium">Lead guardado y enviado a SharePoint exitosamente.</span>
+              <span className="text-sm font-medium">
+                {editingLeadId ? 'Registro actualizado exitosamente.' : 'Lead guardado y enviado a SharePoint exitosamente.'}
+              </span>
             </div>
             {scheduledReminder && (
               <div className="bg-white text-black p-4 rounded-sm border-l-4 border-black flex items-center gap-3 shadow-sm border-y border-r border-zinc-200">
@@ -488,10 +538,21 @@ export default function App() {
         )}
 
         {/* =========================================
-            VISTA 1: FORMULARIO DE REGISTRO
+            VISTA 1: FORMULARIO DE REGISTRO / EDICIÓN
         ============================================= */}
         {currentView === 'form' && (
           <form onSubmit={handleSubmit} className="space-y-6 animate-in fade-in duration-300">
+            {/* Header especial si está en modo edición */}
+            {editingLeadId && (
+              <div className="bg-zinc-800 text-white p-4 rounded-sm flex items-center justify-between border-l-4 border-black shadow-sm">
+                <div className="flex items-center gap-3">
+                  <Edit2 size={20} className="text-zinc-300" />
+                  <span className="text-sm font-bold uppercase tracking-wider">Modo Edición Activado</span>
+                </div>
+                <span className="text-xs text-zinc-400 font-mono">ID: {editingLeadId}</span>
+              </div>
+            )}
+
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
               
               {/* Información General */}
@@ -686,11 +747,11 @@ export default function App() {
                   <div>
                     <label className="block text-xs font-bold text-zinc-600 mb-2">Datos Adjuntos</label>
                     <input type="file" name="datos_adjuntos" multiple onChange={handleFileChange} className="w-full text-sm text-zinc-500 file:mr-4 file:py-2.5 file:px-4 file:rounded-sm file:border file:border-zinc-300 file:text-sm file:font-bold file:bg-zinc-50 file:text-black hover:file:bg-zinc-200 transition cursor-pointer" />
-                    {formData.datos_adjuntos.length > 0 && (
+                    {formData.datos_adjuntos && formData.datos_adjuntos.length > 0 && (
                       <div className="mt-3 space-y-2">
                         {formData.datos_adjuntos.map((file, index) => (
                           <div key={index} className="flex items-center justify-between bg-zinc-50 border border-zinc-200 rounded-sm p-2.5 text-sm">
-                            <span className="truncate max-w-[150px] font-medium text-black">{file.name}</span>
+                            <span className="truncate max-w-[150px] font-medium text-black">{file.name || 'Archivo adjunto'}</span>
                             <button type="button" onClick={() => removeFile(index)} className="text-zinc-400 hover:text-black transition-colors"><X size={14} /></button>
                           </div>
                         ))}
@@ -705,10 +766,15 @@ export default function App() {
               </div>
             </div>
 
-            <div className="flex justify-end pt-4 pb-12">
-              <button disabled={isSubmitting} type="submit" className="bg-black hover:bg-zinc-800 disabled:bg-zinc-400 text-white px-10 py-4 rounded-sm font-bold text-sm transition-all flex items-center gap-3">
-                {isSubmitting ? <Loader2 size={18} className="animate-spin" /> : <Save size={18} />}
-                {isSubmitting ? 'Guardando...' : 'Guardar Registro'}
+            <div className="flex flex-col sm:flex-row justify-end items-center gap-4 pt-4 pb-12">
+              {editingLeadId && (
+                <button type="button" onClick={handleCancelEdit} disabled={isSubmitting} className="w-full sm:w-auto bg-white border border-zinc-300 hover:bg-zinc-100 text-black px-8 py-4 rounded-sm font-bold text-sm transition-all text-center">
+                  Cancelar Edición
+                </button>
+              )}
+              <button disabled={isSubmitting} type="submit" className="w-full sm:w-auto bg-black hover:bg-zinc-800 disabled:bg-zinc-400 text-white px-10 py-4 rounded-sm font-bold text-sm transition-all flex items-center justify-center gap-3">
+                {isSubmitting ? <Loader2 size={18} className="animate-spin" /> : (editingLeadId ? <Edit2 size={18}/> : <Save size={18} />)}
+                {isSubmitting ? (editingLeadId ? 'Actualizando...' : 'Guardando...') : (editingLeadId ? 'Actualizar Registro' : 'Guardar Registro')}
               </button>
             </div>
           </form>
@@ -759,7 +825,7 @@ export default function App() {
             </div>
             
             <div className="overflow-x-auto w-full">
-              <table className="w-full text-left border-collapse min-w-[1300px]">
+              <table className="w-full text-left border-collapse min-w-[1400px]">
                 <thead>
                   <tr className="bg-black text-white text-[10px] tracking-widest uppercase border-b border-black">
                     <th className="p-4 font-bold cursor-pointer hover:bg-zinc-800 transition-colors group" onClick={() => requestSort('titulo')}>
@@ -788,12 +854,13 @@ export default function App() {
                       <div className="flex items-center justify-center gap-2">T. Resp {sortConfig?.key === 'tiempo_respuesta_hrs' ? (sortConfig.direction === 'ascending' ? <ChevronUp size={14}/> : <ChevronDown size={14}/>) : <span className="opacity-0 group-hover:opacity-50 transition-opacity"><ChevronUp size={14}/></span>}</div>
                     </th>
                     <th className="p-4 font-bold text-center">Adjuntos</th>
+                    <th className="p-4 font-bold text-center bg-zinc-900 border-l border-zinc-800">Acciones</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-zinc-100">
                   {filteredAndSortedLeads.length === 0 ? (
                     <tr>
-                      <td colSpan="10" className="p-16 text-center text-zinc-500 text-sm">
+                      <td colSpan="11" className="p-16 text-center text-zinc-500 text-sm">
                         {isLoadingData ? 'Cargando datos desde SharePoint...' : searchTerm || filterAsesor || filterEstado ? 'No se encontraron resultados para los filtros actuales.' : 'No hay datos registrados.'}
                       </td>
                     </tr>
@@ -836,6 +903,15 @@ export default function App() {
                           ) : (
                             <span className="text-zinc-400">-</span>
                           )}
+                        </td>
+                        <td className="p-4 text-center border-l border-zinc-100 bg-white group-hover:bg-zinc-50">
+                          <button 
+                            onClick={() => handleEditLead(lead)} 
+                            className="p-2 text-zinc-400 hover:text-black hover:bg-zinc-100 rounded-sm transition-colors"
+                            title="Editar Registro"
+                          >
+                            <Edit2 size={16} />
+                          </button>
                         </td>
                       </tr>
                     ))
@@ -1150,7 +1226,7 @@ export default function App() {
                     </p>
                     
                     <div>
-                      <label className="block text-xs font-bold text-black mb-2">URL POST (Guardar Datos)</label>
+                      <label className="block text-xs font-bold text-black mb-2">URL POST (Crear Datos)</label>
                       <input 
                         type="url" name="urlPost" value={paConfig.urlPost} onChange={handleConfigChange}
                         className="w-full rounded-sm border-zinc-300 border p-3 focus:ring-1 focus:ring-black outline-none font-mono text-xs bg-zinc-50 focus:bg-white" 
@@ -1167,6 +1243,15 @@ export default function App() {
                       />
                     </div>
 
+                    <div className="pt-2">
+                      <label className="block text-xs font-bold text-black mb-2">URL ACTUALIZAR (Opcional - Modificar Datos)</label>
+                      <input 
+                        type="url" name="urlPut" value={paConfig.urlPut} onChange={handleConfigChange}
+                        className="w-full rounded-sm border-zinc-300 border p-3 focus:ring-1 focus:ring-black outline-none font-mono text-xs bg-zinc-50 focus:bg-white" 
+                        placeholder="Dejar vacío si no usas flujo de actualización" 
+                      />
+                    </div>
+
                     <div className="flex items-center gap-4 mt-4 pt-2">
                       <button 
                         onClick={handleSaveConfig}
@@ -1179,11 +1264,6 @@ export default function App() {
                           <CheckCircle size={16} /> Guardado exitosamente
                         </span>
                       )}
-                    </div>
-
-                    <div className="border border-zinc-200 p-4 rounded-sm mt-4 text-xs text-zinc-500 font-bold flex items-center gap-2">
-                      <span className="w-2 h-2 rounded-full bg-black block"></span>
-                      Usa el botón para guardar y aplicar los cambios.
                     </div>
                   </div>
                 )}
