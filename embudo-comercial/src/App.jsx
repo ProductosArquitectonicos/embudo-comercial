@@ -51,10 +51,11 @@ export default function App() {
     addLog('Aplicación inicializada correctamente.', 'info');
   }, []);
 
-  // --- Estados de Filtros y Ordenamiento (Tabla) ---
+  // --- Estados de Filtros y Ordenamiento ---
   const [searchTerm, setSearchTerm] = useState('');
   const [filterAsesor, setFilterAsesor] = useState('');
   const [filterEstado, setFilterEstado] = useState('');
+  const [filterMes, setFilterMes] = useState(''); // Nuevo filtro por mes (YYYY-MM)
   const [sortConfig, setSortConfig] = useState({ key: 'fecha_ingreso', direction: 'descending' });
 
   // --- Módulo de Administración y Configuración ---
@@ -353,6 +354,11 @@ export default function App() {
       );
     }
 
+    // Aplicar Filtro de Mes
+    if (filterMes) {
+      items = items.filter(lead => lead.fecha_ingreso && lead.fecha_ingreso.startsWith(filterMes));
+    }
+
     // Aplicar filtros desplegables
     if (filterAsesor) items = items.filter(lead => lead.asesor === filterAsesor);
     if (filterEstado) items = items.filter(lead => lead.estado === filterEstado);
@@ -376,11 +382,17 @@ export default function App() {
     }
 
     return items;
-  }, [savedLeads, searchTerm, filterAsesor, filterEstado, sortConfig]);
+  }, [savedLeads, searchTerm, filterMes, filterAsesor, filterEstado, sortConfig]);
 
   // --- LÓGICA DE REPORTES ---
   const reportes = useMemo(() => {
-    const total = savedLeads.length;
+    // Filtramos la lista basándonos en el mes seleccionado antes de calcular KPIs
+    let itemsForReports = savedLeads;
+    if (filterMes) {
+      itemsForReports = itemsForReports.filter(lead => lead.fecha_ingreso && lead.fecha_ingreso.startsWith(filterMes));
+    }
+
+    const total = itemsForReports.length;
     if (total === 0) return null;
 
     let potenciales = 0;
@@ -394,7 +406,7 @@ export default function App() {
     const calificacionCount = {};
     const lineasCount = {};
 
-    savedLeads.forEach(lead => {
+    itemsForReports.forEach(lead => {
       // Calificación y Potenciales
       const calif = lead.calificacion_lead || 'Por evaluar';
       calificacionCount[calif] = (calificacionCount[calif] || 0) + 1;
@@ -443,7 +455,7 @@ export default function App() {
       total, potenciales, calificados, noCalificados, ventasCerradas, efectividadPorcentaje,
       organicos, pauta, finDeSemana, fueraHorario, calificacionCount, lineasCount
     };
-  }, [savedLeads]);
+  }, [savedLeads, filterMes]);
 
   return (
     <div className="min-h-screen bg-[#F8F9FA] text-zinc-900 p-4 md:p-8 font-sans selection:bg-zinc-300">
@@ -796,10 +808,27 @@ export default function App() {
               
               {/* Barra de Filtros */}
               <div className="flex flex-wrap items-center gap-3 w-full justify-end">
-                <div className="relative flex-1 md:w-56 min-w-[200px]">
+                <div className="relative flex-1 md:w-48 min-w-[150px]">
                   <Search className="absolute left-3 top-3 text-zinc-400" size={16} />
                   <input type="text" placeholder="Buscar lead, correo, cel..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)} className="w-full pl-9 p-2.5 text-xs font-medium border border-zinc-300 rounded-sm focus:border-black focus:ring-1 focus:ring-black outline-none transition-all" />
                 </div>
+
+                {/* Filtro de Mes Integrado */}
+                <div className="flex items-center gap-1 border border-zinc-300 rounded-sm bg-white px-2 focus-within:border-black focus-within:ring-1 focus-within:ring-black transition-all">
+                  <input 
+                    type="month" 
+                    value={filterMes} 
+                    onChange={e => setFilterMes(e.target.value)} 
+                    className="p-2 text-xs font-medium outline-none bg-transparent text-zinc-700 cursor-pointer"
+                    title="Filtrar por Mes"
+                  />
+                  {filterMes && (
+                    <button onClick={() => setFilterMes('')} className="text-zinc-400 hover:text-red-500 p-1" title="Limpiar mes">
+                      <X size={14} />
+                    </button>
+                  )}
+                </div>
+
                 <select value={filterAsesor} onChange={e => setFilterAsesor(e.target.value)} className="p-2.5 text-xs font-medium border border-zinc-300 rounded-sm focus:border-black outline-none cursor-pointer bg-white">
                   <option value="">Todos los asesores</option>
                   {asesoresList.map(a => <option key={a} value={a}>{a}</option>)}
@@ -861,7 +890,7 @@ export default function App() {
                   {filteredAndSortedLeads.length === 0 ? (
                     <tr>
                       <td colSpan="11" className="p-16 text-center text-zinc-500 text-sm">
-                        {isLoadingData ? 'Cargando datos desde SharePoint...' : searchTerm || filterAsesor || filterEstado ? 'No se encontraron resultados para los filtros actuales.' : 'No hay datos registrados.'}
+                        {isLoadingData ? 'Cargando datos desde SharePoint...' : searchTerm || filterAsesor || filterEstado || filterMes ? 'No se encontraron resultados para los filtros actuales.' : 'No hay datos registrados.'}
                       </td>
                     </tr>
                   ) : (
@@ -927,11 +956,36 @@ export default function App() {
         ============================================= */}
         {currentView === 'reports' && (
           <div className="space-y-6 animate-in fade-in duration-300">
+            {/* Header de Reportes y Filtro de Mes */}
+            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-white p-5 rounded-sm shadow-sm border border-zinc-200">
+               <h2 className="text-sm font-bold text-black uppercase tracking-widest flex items-center gap-2">
+                 <BarChart3 size={18}/> Panel de Métricas
+               </h2>
+               <div className="flex items-center gap-3">
+                 <label className="text-xs font-bold text-zinc-500 uppercase tracking-widest">Filtrar por Mes:</label>
+                 <div className="flex items-center gap-1 border border-zinc-300 rounded-sm bg-zinc-50 px-2 focus-within:border-black focus-within:ring-1 focus-within:ring-black transition-all">
+                   <input 
+                      type="month" 
+                      value={filterMes} 
+                      onChange={e => setFilterMes(e.target.value)} 
+                      className="p-2 text-xs font-medium outline-none bg-transparent cursor-pointer"
+                    />
+                    {filterMes && (
+                      <button onClick={() => setFilterMes('')} className="text-zinc-400 hover:text-red-500 p-1" title="Limpiar filtro">
+                        <X size={14}/>
+                      </button>
+                    )}
+                 </div>
+               </div>
+            </div>
+
             {!reportes ? (
                <div className="bg-white p-12 text-center rounded-sm shadow-sm border border-zinc-200">
                   <BarChart3 size={48} className="mx-auto text-zinc-300 mb-4" />
-                  <h3 className="text-lg font-bold text-black mb-2">No hay datos suficientes</h3>
-                  <p className="text-sm text-zinc-500">Agrega registros en la pestaña "Nuevo" o actualiza la Base de Datos para generar reportes.</p>
+                  <h3 className="text-lg font-bold text-black mb-2">Sin datos para mostrar</h3>
+                  <p className="text-sm text-zinc-500">
+                    {filterMes ? `No hay registros que coincidan con el mes de ${filterMes}.` : 'Agrega registros en la pestaña "Nuevo" o actualiza la Base de Datos.'}
+                  </p>
                </div>
             ) : (
               <>
@@ -1049,7 +1103,7 @@ export default function App() {
                   {/* Líneas de Interés */}
                   <div className="bg-white p-6 rounded-sm shadow-sm border border-zinc-200">
                     <h3 className="text-sm font-bold text-black uppercase tracking-wide mb-6 border-b border-zinc-100 pb-3">Líneas de Interés Solicitadas</h3>
-                    <div className="space-y-4 max-h-48 overflow-y-auto pr-2">
+                    <div className="space-y-4 max-h-48 overflow-y-auto pr-2 custom-scrollbar">
                       {Object.entries(reportes.lineasCount).sort((a,b) => b[1] - a[1]).map(([linea, count]) => {
                         const percent = reportes.total > 0 ? (count / reportes.total) * 100 : 0;
                         return (
@@ -1084,7 +1138,7 @@ export default function App() {
                   </h3>
                   <button onClick={() => setShowLogsModal(false)} className="text-zinc-400 hover:text-black transition-colors"><X size={18} /></button>
                </div>
-               <div className="p-5 overflow-y-auto flex-1 bg-[#1E1E1E] text-zinc-300 font-mono text-xs">
+               <div className="p-5 overflow-y-auto flex-1 bg-[#1E1E1E] text-zinc-300 font-mono text-xs custom-scrollbar">
                   {appLogs.length === 0 ? (
                      <p className="text-zinc-500">No hay registros en la sesión actual.</p>
                   ) : (
@@ -1157,7 +1211,7 @@ export default function App() {
                         <UserPlus size={16} /> Agregar
                       </button>
                     </div>
-                    <div className="max-h-60 overflow-y-auto space-y-2 pr-2">
+                    <div className="max-h-60 overflow-y-auto space-y-2 pr-2 custom-scrollbar">
                       {asesoresList.map(asesor => (
                         <div key={asesor} className="flex items-center justify-between bg-white border border-zinc-200 p-3.5 rounded-sm hover:border-black transition-colors">
                           <span className="text-sm font-bold text-black">{asesor}</span>
@@ -1182,7 +1236,7 @@ export default function App() {
                         <Layers size={16} /> Agregar
                       </button>
                     </div>
-                    <div className="max-h-60 overflow-y-auto space-y-2 pr-2">
+                    <div className="max-h-60 overflow-y-auto space-y-2 pr-2 custom-scrollbar">
                       {lineasList.map(linea => (
                         <div key={linea} className="flex items-center justify-between bg-white border border-zinc-200 p-3.5 rounded-sm hover:border-black transition-colors">
                           <span className="text-sm font-bold text-black">{linea}</span>
@@ -1207,7 +1261,7 @@ export default function App() {
                         <Activity size={16} /> Agregar
                       </button>
                     </div>
-                    <div className="max-h-60 overflow-y-auto space-y-2 pr-2">
+                    <div className="max-h-60 overflow-y-auto space-y-2 pr-2 custom-scrollbar">
                       {accionesList.map(accion => (
                         <div key={accion} className="flex items-center justify-between bg-white border border-zinc-200 p-3.5 rounded-sm hover:border-black transition-colors">
                           <span className="text-sm font-bold text-black">{accion}</span>
