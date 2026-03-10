@@ -5,7 +5,7 @@ import {
   Star, Bell, X, Settings, Trash2, UserPlus,
   TableProperties, FilePlus2, RefreshCw, Loader2, Database,
   BarChart3, Target, TrendingUp, CalendarX, Moon, Layers, Activity,
-  Search, Filter, ChevronUp, ChevronDown, Terminal, Edit2
+  Search, Filter, ChevronUp, ChevronDown, Terminal, Edit2, Megaphone, Globe
 } from 'lucide-react';
 
 export default function App() {
@@ -55,7 +55,8 @@ export default function App() {
   const [searchTerm, setSearchTerm] = useState('');
   const [filterAsesor, setFilterAsesor] = useState('');
   const [filterEstado, setFilterEstado] = useState('');
-  const [filterMes, setFilterMes] = useState(''); // Nuevo filtro por mes (YYYY-MM)
+  const [filterMes, setFilterMes] = useState(''); // Filtro por mes (YYYY-MM)
+  const [reportFilterCalificacion, setReportFilterCalificacion] = useState(''); // Nuevo filtro de reportes
   const [sortConfig, setSortConfig] = useState({ key: 'fecha_ingreso', direction: 'descending' });
 
   // --- Módulo de Administración y Configuración ---
@@ -72,17 +73,29 @@ export default function App() {
   const defaultAcciones = [
     'Agendar Cita', 'Cotizacion', 'Envio Catalogo', 'Venta', 'Mensaje Cierre', 'Primer Contacto'
   ].sort((a, b) => a.localeCompare(b));
+
+  const defaultFuentes = [
+    'ING PAID', 'FB PAID', 'SM ORGANIC', 'GOOGLE SEARCH', 'GOOGLE ORGANIC'
+  ].sort((a, b) => a.localeCompare(b));
+
+  const defaultCampanias = [
+    'Hansgrohe'
+  ].sort((a, b) => a.localeCompare(b));
   
   const [asesoresList, setAsesoresList] = useState(defaultAsesores);
   const [lineasList, setLineasList] = useState(defaultLineas);
   const [accionesList, setAccionesList] = useState(defaultAcciones);
+  const [fuentesList, setFuentesList] = useState(defaultFuentes);
+  const [campaniasList, setCampaniasList] = useState(defaultCampanias);
   
   const [showAdminModal, setShowAdminModal] = useState(false);
-  const [adminTab, setAdminTab] = useState('asesores'); // 'asesores' | 'lineas' | 'acciones' | 'integracion'
+  const [adminTab, setAdminTab] = useState('asesores'); // 'asesores' | 'lineas' | 'acciones' | 'fuentes' | 'campanias' | 'integracion'
   
   const [newAsesorName, setNewAsesorName] = useState('');
   const [newLineaName, setNewLineaName] = useState('');
   const [newAccionName, setNewAccionName] = useState('');
+  const [newFuenteName, setNewFuenteName] = useState('');
+  const [newCampaniaName, setNewCampaniaName] = useState('');
 
   // Configuración de Power Automate
   const DEFAULT_POST_URL = "https://default2dad2f4230e64fe8adc416a2300053.14.environment.api.powerplatform.com:443/powerautomate/automations/direct/workflows/eb80d7bc6701476b8fcc8a81b004b87b/triggers/manual/paths/invoke?api-version=1&sp=%2Ftriggers%2Fmanual%2Frun&sv=1.0&sig=7mnm_UEBbdPHBLJzOgUDdnQM_jLP5szOIvH8yiwyNw0";
@@ -111,7 +124,7 @@ export default function App() {
     }, 3000);
   };
 
-  // Funciones Asesores, Líneas, Acciones
+  // Funciones Asesores, Líneas, Acciones, Fuentes y Campañas
   const handleAddAsesor = () => {
     if (newAsesorName.trim() && !asesoresList.includes(newAsesorName.trim())) {
       setAsesoresList([...asesoresList, newAsesorName.trim()]);
@@ -150,6 +163,32 @@ export default function App() {
     if (formData.accion === accionToRemove) setFormData(prev => ({ ...prev, accion: '' }));
   };
 
+  const handleAddFuente = () => {
+    if (newFuenteName.trim() && !fuentesList.includes(newFuenteName.trim().toUpperCase())) {
+      const newList = [...fuentesList, newFuenteName.trim().toUpperCase()].sort((a, b) => a.localeCompare(b));
+      setFuentesList(newList);
+      setNewFuenteName('');
+    }
+  };
+
+  const handleRemoveFuente = (fuenteToRemove) => {
+    setFuentesList(fuentesList.filter(f => f !== fuenteToRemove));
+    if (formData.fuente_medio === fuenteToRemove) setFormData(prev => ({ ...prev, fuente_medio: '' }));
+  };
+
+  const handleAddCampania = () => {
+    if (newCampaniaName.trim() && !campaniasList.includes(newCampaniaName.trim())) {
+      const newList = [...campaniasList, newCampaniaName.trim()].sort((a, b) => a.localeCompare(b));
+      setCampaniasList(newList);
+      setNewCampaniaName('');
+    }
+  };
+
+  const handleRemoveCampania = (campaniaToRemove) => {
+    setCampaniasList(campaniasList.filter(c => c !== campaniaToRemove));
+    if (formData.campania === campaniaToRemove) setFormData(prev => ({ ...prev, campania: '' }));
+  };
+
   // Efecto: Cálculo de tiempo de respuesta
   useEffect(() => {
     if (formData.fecha_ingreso && formData.fecha_control) {
@@ -184,7 +223,6 @@ export default function App() {
 
   const convertFilesToBase64 = async (files) => {
     const promises = files.map(file => {
-      // Si el archivo ya es un link o ya fue procesado, se omite (esto pasa al editar)
       if (!file.type && file.contentBytes) return Promise.resolve(file);
       if (!file.name) return Promise.resolve(null);
 
@@ -204,7 +242,6 @@ export default function App() {
     setFormData({
       ...initialState, // Asegurar estructura
       ...lead,
-      // Aseguramos que los adjuntos locales funcionen (generalmente no se pueden recargar inputs de tipo file, así que limpiamos o mantenemos info referencial)
       datos_adjuntos: lead.datos_adjuntos || [] 
     });
     setCurrentView('form');
@@ -242,7 +279,7 @@ export default function App() {
         if (paConfig.urlPut) {
           addLog('Enviando solicitud de ACTUALIZACIÓN a Power Automate...', 'info');
           await fetch(paConfig.urlPut, {
-            method: 'POST', // Usamos POST para mayor compatibilidad con HTTP Trigger de PA, enviando el ID en el payload
+            method: 'POST', 
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(payload)
           });
@@ -251,7 +288,6 @@ export default function App() {
           addLog('Registro actualizado localmente (Falta URL de actualización).', 'warning');
         }
         
-        // Actualizar en el estado local
         setSavedLeads(prev => prev.map(lead => lead.id === editingLeadId ? { ...payload, id: editingLeadId } : lead));
         
       } else {
@@ -267,11 +303,9 @@ export default function App() {
         } else {
           addLog('Registro guardado localmente (Sin URL de SP configurada).', 'warning');
         }
-        // Guardar en el estado local
         setSavedLeads([{ ...payload, id: Date.now() }, ...savedLeads]);
       }
 
-      // Recordatorio local
       if (formData.programar_recordatorio && formData.fecha_seguimiento_dia) {
         const timeString = formData.hora_seguimiento || '00:00';
         const fechaSeg = new Date(`${formData.fecha_seguimiento_dia}T${timeString}:00`);
@@ -332,7 +366,7 @@ export default function App() {
     }
   }, [currentView]);
 
-  // --- Funciones para Filtrar y Ordenar ---
+  // --- Funciones para Filtrar y Ordenar (Tabla) ---
   const requestSort = (key) => {
     let direction = 'ascending';
     if (sortConfig && sortConfig.key === key && sortConfig.direction === 'ascending') {
@@ -344,7 +378,6 @@ export default function App() {
   const filteredAndSortedLeads = useMemo(() => {
     let items = [...savedLeads];
 
-    // Aplicar búsqueda de texto
     if (searchTerm) {
       const lowerSearch = searchTerm.toLowerCase();
       items = items.filter(lead => 
@@ -354,22 +387,18 @@ export default function App() {
       );
     }
 
-    // Aplicar Filtro de Mes
     if (filterMes) {
       items = items.filter(lead => lead.fecha_ingreso && lead.fecha_ingreso.startsWith(filterMes));
     }
 
-    // Aplicar filtros desplegables
     if (filterAsesor) items = items.filter(lead => lead.asesor === filterAsesor);
     if (filterEstado) items = items.filter(lead => lead.estado === filterEstado);
 
-    // Aplicar ordenamiento
     if (sortConfig !== null) {
       items.sort((a, b) => {
         let aValue = a[sortConfig.key] || '';
         let bValue = b[sortConfig.key] || '';
 
-        // Manejo especial para números (Tiempo de Respuesta)
         if (sortConfig.key === 'tiempo_respuesta_hrs') {
           aValue = parseFloat(aValue) || 0;
           bValue = parseFloat(bValue) || 0;
@@ -386,10 +415,16 @@ export default function App() {
 
   // --- LÓGICA DE REPORTES ---
   const reportes = useMemo(() => {
-    // Filtramos la lista basándonos en el mes seleccionado antes de calcular KPIs
     let itemsForReports = savedLeads;
+    
+    // Filtrar por mes (Global compartido con la vista de Datos)
     if (filterMes) {
       itemsForReports = itemsForReports.filter(lead => lead.fecha_ingreso && lead.fecha_ingreso.startsWith(filterMes));
+    }
+    
+    // Filtrar por Calificación (Exclusivo de la vista de Reportes)
+    if (reportFilterCalificacion) {
+      itemsForReports = itemsForReports.filter(lead => lead.calificacion_lead === reportFilterCalificacion);
     }
 
     const total = itemsForReports.length;
@@ -455,7 +490,7 @@ export default function App() {
       total, potenciales, calificados, noCalificados, ventasCerradas, efectividadPorcentaje,
       organicos, pauta, finDeSemana, fueraHorario, calificacionCount, lineasCount
     };
-  }, [savedLeads, filterMes]);
+  }, [savedLeads, filterMes, reportFilterCalificacion]);
 
   return (
     <div className="min-h-screen bg-[#F8F9FA] text-zinc-900 p-4 md:p-8 font-sans selection:bg-zinc-300">
@@ -472,7 +507,8 @@ export default function App() {
                 onError={(e) => {
                   e.target.onerror = null; 
                   e.target.style.display = 'none';
-                  document.getElementById('fallback-logo').style.display = 'flex';
+                  const fallback = document.getElementById('fallback-logo');
+                  if (fallback) fallback.style.display = 'flex';
                 }}
               />
               <div id="fallback-logo" className="hidden flex-col justify-center">
@@ -595,11 +631,21 @@ export default function App() {
                   </div>
                   <div>
                     <label className="block text-xs font-bold text-zinc-600 mb-2">Fuente / Medio</label>
-                    <input type="text" name="fuente_medio" value={formData.fuente_medio} onChange={handleChange} className="w-full rounded-sm border-zinc-300 border p-3 text-sm focus:ring-1 focus:ring-black focus:border-black outline-none bg-zinc-50 focus:bg-white transition-colors" placeholder="Ej. Orgánico, Instagram..." />
+                    <select name="fuente_medio" value={formData.fuente_medio} onChange={handleChange} className="w-full rounded-sm border-zinc-300 border p-3 text-sm focus:ring-1 focus:ring-black focus:border-black outline-none bg-zinc-50 focus:bg-white transition-colors cursor-pointer">
+                      <option value="">Seleccione...</option>
+                      {fuentesList.map(fuente => (
+                        <option key={fuente} value={fuente}>{fuente}</option>
+                      ))}
+                    </select>
                   </div>
                   <div>
                     <label className="block text-xs font-bold text-zinc-600 mb-2">Campaña</label>
-                    <input type="text" name="campania" value={formData.campania} onChange={handleChange} className="w-full rounded-sm border-zinc-300 border p-3 text-sm focus:ring-1 focus:ring-black focus:border-black outline-none bg-zinc-50 focus:bg-white transition-colors" />
+                    <select name="campania" value={formData.campania} onChange={handleChange} className="w-full rounded-sm border-zinc-300 border p-3 text-sm focus:ring-1 focus:ring-black focus:border-black outline-none bg-zinc-50 focus:bg-white transition-colors cursor-pointer">
+                      <option value="">Seleccione...</option>
+                      {campaniasList.map(campania => (
+                        <option key={campania} value={campania}>{campania}</option>
+                      ))}
+                    </select>
                   </div>
                   <div className="md:col-span-2 border-t border-zinc-100 pt-3">
                     <label className="block text-xs font-bold text-zinc-600 mb-2">Línea de Interés</label>
@@ -854,7 +900,7 @@ export default function App() {
             </div>
             
             <div className="overflow-x-auto w-full">
-              <table className="w-full text-left border-collapse min-w-[1400px]">
+              <table className="w-full text-left border-collapse min-w-[1600px]">
                 <thead>
                   <tr className="bg-black text-white text-[10px] tracking-widest uppercase border-b border-black">
                     <th className="p-4 font-bold cursor-pointer hover:bg-zinc-800 transition-colors group" onClick={() => requestSort('titulo')}>
@@ -868,6 +914,12 @@ export default function App() {
                     </th>
                     <th className="p-4 font-bold cursor-pointer hover:bg-zinc-800 transition-colors group" onClick={() => requestSort('linea_interes')}>
                       <div className="flex items-center gap-2">Línea Interés {sortConfig?.key === 'linea_interes' ? (sortConfig.direction === 'ascending' ? <ChevronUp size={14}/> : <ChevronDown size={14}/>) : <span className="opacity-0 group-hover:opacity-50 transition-opacity"><ChevronUp size={14}/></span>}</div>
+                    </th>
+                    <th className="p-4 font-bold cursor-pointer hover:bg-zinc-800 transition-colors group" onClick={() => requestSort('fuente_medio')}>
+                      <div className="flex items-center gap-2">Fuente/Medio {sortConfig?.key === 'fuente_medio' ? (sortConfig.direction === 'ascending' ? <ChevronUp size={14}/> : <ChevronDown size={14}/>) : <span className="opacity-0 group-hover:opacity-50 transition-opacity"><ChevronUp size={14}/></span>}</div>
+                    </th>
+                    <th className="p-4 font-bold cursor-pointer hover:bg-zinc-800 transition-colors group" onClick={() => requestSort('campania')}>
+                      <div className="flex items-center gap-2">Campaña {sortConfig?.key === 'campania' ? (sortConfig.direction === 'ascending' ? <ChevronUp size={14}/> : <ChevronDown size={14}/>) : <span className="opacity-0 group-hover:opacity-50 transition-opacity"><ChevronUp size={14}/></span>}</div>
                     </th>
                     <th className="p-4 font-bold cursor-pointer hover:bg-zinc-800 transition-colors group" onClick={() => requestSort('estado')}>
                       <div className="flex items-center gap-2">Estado {sortConfig?.key === 'estado' ? (sortConfig.direction === 'ascending' ? <ChevronUp size={14}/> : <ChevronDown size={14}/>) : <span className="opacity-0 group-hover:opacity-50 transition-opacity"><ChevronUp size={14}/></span>}</div>
@@ -889,7 +941,7 @@ export default function App() {
                 <tbody className="divide-y divide-zinc-100">
                   {filteredAndSortedLeads.length === 0 ? (
                     <tr>
-                      <td colSpan="11" className="p-16 text-center text-zinc-500 text-sm">
+                      <td colSpan="13" className="p-16 text-center text-zinc-500 text-sm">
                         {isLoadingData ? 'Cargando datos desde SharePoint...' : searchTerm || filterAsesor || filterEstado || filterMes ? 'No se encontraron resultados para los filtros actuales.' : 'No hay datos registrados.'}
                       </td>
                     </tr>
@@ -900,6 +952,8 @@ export default function App() {
                         <td className="p-4">{lead.fecha_ingreso ? new Date(lead.fecha_ingreso).toLocaleString([],{dateStyle:'short', timeStyle:'short'}) : '-'}</td>
                         <td className="p-4">{lead.asesor || '-'}</td>
                         <td className="p-4">{lead.linea_interes || '-'}</td>
+                        <td className="p-4 text-xs font-bold text-zinc-500">{lead.fuente_medio || '-'}</td>
+                        <td className="p-4 text-xs font-bold text-zinc-500">{lead.campania || '-'}</td>
                         <td className="p-4">
                           <span className={`px-2 py-1 rounded-sm text-xs font-bold border ${
                             lead.estado === 'Nuevo' ? 'bg-zinc-100 text-zinc-800 border-zinc-300' : 
@@ -956,25 +1010,45 @@ export default function App() {
         ============================================= */}
         {currentView === 'reports' && (
           <div className="space-y-6 animate-in fade-in duration-300">
-            {/* Header de Reportes y Filtro de Mes */}
-            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-white p-5 rounded-sm shadow-sm border border-zinc-200">
+            {/* Header de Reportes y Filtros */}
+            <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-white p-5 rounded-sm shadow-sm border border-zinc-200">
                <h2 className="text-sm font-bold text-black uppercase tracking-widest flex items-center gap-2">
                  <BarChart3 size={18}/> Panel de Métricas
                </h2>
-               <div className="flex items-center gap-3">
-                 <label className="text-xs font-bold text-zinc-500 uppercase tracking-widest">Filtrar por Mes:</label>
-                 <div className="flex items-center gap-1 border border-zinc-300 rounded-sm bg-zinc-50 px-2 focus-within:border-black focus-within:ring-1 focus-within:ring-black transition-all">
-                   <input 
-                      type="month" 
-                      value={filterMes} 
-                      onChange={e => setFilterMes(e.target.value)} 
-                      className="p-2 text-xs font-medium outline-none bg-transparent cursor-pointer"
-                    />
-                    {filterMes && (
-                      <button onClick={() => setFilterMes('')} className="text-zinc-400 hover:text-red-500 p-1" title="Limpiar filtro">
-                        <X size={14}/>
-                      </button>
-                    )}
+               
+               <div className="flex flex-wrap items-center gap-4">
+                 {/* Filtro Mes (Global) */}
+                 <div className="flex items-center gap-2">
+                   <label className="text-xs font-bold text-zinc-500 uppercase tracking-widest hidden sm:block">Mes:</label>
+                   <div className="flex items-center gap-1 border border-zinc-300 rounded-sm bg-zinc-50 px-2 focus-within:border-black focus-within:ring-1 focus-within:ring-black transition-all">
+                     <input 
+                        type="month" 
+                        value={filterMes} 
+                        onChange={e => setFilterMes(e.target.value)} 
+                        className="p-2 text-xs font-medium outline-none bg-transparent cursor-pointer"
+                      />
+                      {filterMes && (
+                        <button onClick={() => setFilterMes('')} className="text-zinc-400 hover:text-red-500 p-1" title="Limpiar filtro">
+                          <X size={14}/>
+                        </button>
+                      )}
+                   </div>
+                 </div>
+
+                 {/* Filtro Calificación (Solo Reportes) */}
+                 <div className="flex items-center gap-2 border-l border-zinc-200 pl-4">
+                    <label className="text-xs font-bold text-zinc-500 uppercase tracking-widest hidden sm:block">Calificación:</label>
+                    <select
+                      value={reportFilterCalificacion}
+                      onChange={e => setReportFilterCalificacion(e.target.value)}
+                      className="p-2.5 text-xs font-medium border border-zinc-300 rounded-sm focus:border-black outline-none cursor-pointer bg-zinc-50 transition-all"
+                    >
+                      <option value="">Todas</option>
+                      <option value="Por evaluar">Por evaluar</option>
+                      <option value="Frío">Frío</option>
+                      <option value="Tibio">Tibio</option>
+                      <option value="Caliente">Caliente</option>
+                    </select>
                  </div>
                </div>
             </div>
@@ -984,7 +1058,7 @@ export default function App() {
                   <BarChart3 size={48} className="mx-auto text-zinc-300 mb-4" />
                   <h3 className="text-lg font-bold text-black mb-2">Sin datos para mostrar</h3>
                   <p className="text-sm text-zinc-500">
-                    {filterMes ? `No hay registros que coincidan con el mes de ${filterMes}.` : 'Agrega registros en la pestaña "Nuevo" o actualiza la Base de Datos.'}
+                    {filterMes || reportFilterCalificacion ? `No hay registros que coincidan con los filtros actuales.` : 'Agrega registros en la pestaña "Nuevo" o actualiza la Base de Datos.'}
                   </p>
                </div>
             ) : (
@@ -1186,6 +1260,18 @@ export default function App() {
                   Acciones
                 </button>
                 <button 
+                  onClick={() => setAdminTab('fuentes')}
+                  className={`whitespace-nowrap flex-1 p-4 text-xs font-bold border-b-2 transition-colors ${adminTab === 'fuentes' ? 'border-black text-black bg-white' : 'border-transparent text-zinc-400 hover:text-black'}`}
+                >
+                  Fuentes
+                </button>
+                <button 
+                  onClick={() => setAdminTab('campanias')}
+                  className={`whitespace-nowrap flex-1 p-4 text-xs font-bold border-b-2 transition-colors ${adminTab === 'campanias' ? 'border-black text-black bg-white' : 'border-transparent text-zinc-400 hover:text-black'}`}
+                >
+                  Campañas
+                </button>
+                <button 
                   onClick={() => setAdminTab('integracion')}
                   className={`whitespace-nowrap flex-1 p-4 text-xs font-bold border-b-2 transition-colors ${adminTab === 'integracion' ? 'border-black text-black bg-white' : 'border-transparent text-zinc-400 hover:text-black'}`}
                 >
@@ -1266,6 +1352,56 @@ export default function App() {
                         <div key={accion} className="flex items-center justify-between bg-white border border-zinc-200 p-3.5 rounded-sm hover:border-black transition-colors">
                           <span className="text-sm font-bold text-black">{accion}</span>
                           <button onClick={() => handleRemoveAccion(accion)} className="text-zinc-400 hover:text-red-600 transition-colors"><Trash2 size={16} /></button>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* TAB FUENTES */}
+                {adminTab === 'fuentes' && (
+                  <div className="animate-in fade-in">
+                    <div className="flex gap-3 mb-6">
+                      <input 
+                        type="text" value={newFuenteName} onChange={(e) => setNewFuenteName(e.target.value)}
+                        onKeyDown={(e) => e.key === 'Enter' && handleAddFuente()}
+                        placeholder="Nueva fuente (Ej. GOOGLE PAID)..."
+                        className="flex-1 rounded-sm border-zinc-300 border p-3 text-sm focus:ring-1 focus:ring-black focus:border-black outline-none bg-zinc-50 focus:bg-white"
+                      />
+                      <button onClick={handleAddFuente} disabled={!newFuenteName.trim()} className="bg-black hover:bg-zinc-800 disabled:bg-zinc-300 text-white px-5 py-3 rounded-sm font-bold text-sm transition-colors flex items-center gap-2">
+                        <Globe size={16} /> Agregar
+                      </button>
+                    </div>
+                    <div className="max-h-60 overflow-y-auto space-y-2 pr-2 custom-scrollbar">
+                      {fuentesList.map(fuente => (
+                        <div key={fuente} className="flex items-center justify-between bg-white border border-zinc-200 p-3.5 rounded-sm hover:border-black transition-colors">
+                          <span className="text-sm font-bold text-black">{fuente}</span>
+                          <button onClick={() => handleRemoveFuente(fuente)} className="text-zinc-400 hover:text-red-600 transition-colors"><Trash2 size={16} /></button>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* TAB CAMPAÑAS */}
+                {adminTab === 'campanias' && (
+                  <div className="animate-in fade-in">
+                    <div className="flex gap-3 mb-6">
+                      <input 
+                        type="text" value={newCampaniaName} onChange={(e) => setNewCampaniaName(e.target.value)}
+                        onKeyDown={(e) => e.key === 'Enter' && handleAddCampania()}
+                        placeholder="Nueva campaña..."
+                        className="flex-1 rounded-sm border-zinc-300 border p-3 text-sm focus:ring-1 focus:ring-black focus:border-black outline-none bg-zinc-50 focus:bg-white"
+                      />
+                      <button onClick={handleAddCampania} disabled={!newCampaniaName.trim()} className="bg-black hover:bg-zinc-800 disabled:bg-zinc-300 text-white px-5 py-3 rounded-sm font-bold text-sm transition-colors flex items-center gap-2">
+                        <Megaphone size={16} /> Agregar
+                      </button>
+                    </div>
+                    <div className="max-h-60 overflow-y-auto space-y-2 pr-2 custom-scrollbar">
+                      {campaniasList.map(campania => (
+                        <div key={campania} className="flex items-center justify-between bg-white border border-zinc-200 p-3.5 rounded-sm hover:border-black transition-colors">
+                          <span className="text-sm font-bold text-black">{campania}</span>
+                          <button onClick={() => handleRemoveCampania(campania)} className="text-zinc-400 hover:text-red-600 transition-colors"><Trash2 size={16} /></button>
                         </div>
                       ))}
                     </div>
