@@ -466,7 +466,7 @@ export default function App() {
           <div className="flex items-center gap-4">
             <div className="flex items-center gap-4 pr-5 border-r border-zinc-200 h-16">
               <img 
-                src="src/assets/logo.jpg" 
+                src="public/logo.jpg" 
                 alt="Productos Arquitectónicos" 
                 className="h-full object-contain"
                 onError={(e) => {
