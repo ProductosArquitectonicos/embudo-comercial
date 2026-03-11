@@ -258,9 +258,15 @@ export default function App() {
   // Cargar datos en el formulario para editar
   const handleEditLead = (lead) => {
     setEditingLeadId(lead.id);
+    // Limpiamos nulos o undefined para evitar errores en inputs controlados de React
+    const safeLead = Object.keys(lead).reduce((acc, key) => {
+        acc[key] = lead[key] === null ? '' : lead[key];
+        return acc;
+    }, {});
+
     setFormData({
       ...initialState, // Asegurar estructura
-      ...lead,
+      ...safeLead,
       datos_adjuntos: lead.datos_adjuntos || [] 
     });
     setShowEditModal(true);
@@ -297,13 +303,13 @@ export default function App() {
         // LÓGICA DE ACTUALIZACIÓN (PUT/PATCH)
         if (paConfig.urlPut) {
           addLog('Enviando solicitud de ACTUALIZACIÓN a Power Automate...', 'info');
-          await fetch(paConfig.urlPut, {
+          const response = await fetch(paConfig.urlPut, {
             method: 'POST', // Usamos POST para mayor compatibilidad con HTTP Trigger de PA
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(payload)
           });
+          if (!response.ok) throw new Error(`HTTP Error: ${response.status}`);
           addLog('Registro actualizado en SharePoint exitosamente.', 'success');
-          // Ya NO actualizamos el estado local asumiendo éxito. Forzamos a que SharePoint sea la única fuente de verdad.
         } else {
           addLog('No se configuró URL de actualización. No se enviaron los cambios.', 'error');
           alert("Debes configurar la URL de actualización en los ajustes.");
@@ -313,13 +319,13 @@ export default function App() {
         // LÓGICA DE CREACIÓN (POST)
         if (paConfig.urlPost) {
           addLog('Enviando solicitud POST a Power Automate...', 'info');
-          await fetch(paConfig.urlPost, {
+          const response = await fetch(paConfig.urlPost, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(payload)
           });
+          if (!response.ok) throw new Error(`HTTP Error: ${response.status}`);
           addLog('Registro guardado y enviado a SharePoint exitosamente.', 'success');
-          // Eliminado: setSavedLeads([{ ...payload, id: Date.now() }, ...savedLeads]); -> Ahora no guardamos en memoria local simulada.
         } else {
            addLog('Error: No hay URL POST configurada.', 'error');
            alert("No has configurado la URL para enviar datos (POST).");
@@ -348,7 +354,7 @@ export default function App() {
       setEditingLeadId(null);
 
       // Despues de enviar (nuevo o actualización), intentamos traer los datos actualizados de SharePoint
-      fetchLeadsData();
+      setTimeout(() => fetchLeadsData(), 1000); // Pequeña pausa para asegurar que SP guardó
       
       setTimeout(() => {
         setShowSuccess(false);
@@ -367,7 +373,6 @@ export default function App() {
   const fetchLeadsData = async () => {
     if (!paConfig.urlGet) {
       addLog('Error: Intento de cargar datos sin URL GET configurada.', 'error');
-      alert("No hay una URL GET de Power Automate configurada. Se mostrarán solo los datos locales.");
       return;
     }
 
@@ -375,14 +380,33 @@ export default function App() {
     addLog('Iniciando carga de datos desde SharePoint (GET)...', 'info');
     try {
       const response = await fetch(paConfig.urlGet);
-      const data = await response.json();
-      const leads = Array.isArray(data) ? data : (data.value || []); 
-      setSavedLeads(leads);
-      addLog(`Carga exitosa: Se sincronizaron ${leads.length} registros desde SharePoint.`, 'success');
+      if (!response.ok) {
+         throw new Error(`HTTP Status: ${response.status}`);
+      }
+
+      const textData = await response.text();
+      
+      if (!textData || textData.trim() === '') {
+         addLog('La respuesta del servidor está vacía.', 'warning');
+         setSavedLeads([]);
+         return;
+      }
+
+      try {
+          const data = JSON.parse(textData);
+          // Aseguramos que maneje arreglos que vienen dentro de value o directo
+          const leads = Array.isArray(data) ? data : (Array.isArray(data?.value) ? data.value : []); 
+          setSavedLeads(leads);
+          addLog(`Carga exitosa: Se sincronizaron ${leads.length} registros desde SharePoint.`, 'success');
+      } catch(parseError) {
+          console.error("Error analizando JSON:", textData);
+          throw new Error("El formato devuelto por Power Automate no es un JSON válido.");
+      }
+
     } catch (error) {
       console.error("Error al obtener datos:", error);
       addLog(`Fallo al cargar datos: ${error.message}`, 'error');
-      alert("Error al obtener los datos de SharePoint/Power Automate.");
+      alert("Error al obtener los datos de SharePoint/Power Automate. Revisa los logs para más detalle.");
     } finally {
       setIsLoadingData(false);
     }
