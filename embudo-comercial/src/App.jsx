@@ -118,7 +118,7 @@ export default function App() {
 
   // Configuración de Power Automate
   const DEFAULT_POST_URL = "https://default2dad2f4230e64fe8adc416a2300053.14.environment.api.powerplatform.com:443/powerautomate/automations/direct/workflows/eb80d7bc6701476b8fcc8a81b004b87b/triggers/manual/paths/invoke?api-version=1&sp=%2Ftriggers%2Fmanual%2Frun&sv=1.0&sig=7mnm_UEBbdPHBLJzOgUDdnQM_jLP5szOIvH8yiwyNw0";
-  const DEFAULT_GET_URL = "https://default2dad2f4230e64fe8adc416a2300053.14.environment.api.powerplatform.com:443/powerautomate/automations/direct/workflows/c3760089aa194bffab0b4997b56ed1d1/triggers/manual/paths/invoke?api-version=1";
+  const DEFAULT_GET_URL = "https://default2dad2f4230e64fe8adc416a2300053.14.environment.api.powerplatform.com:443/powerautomate/automations/direct/workflows/c3760089aa194bffab0b4997b56ed1d1/triggers/manual/paths/invoke?api-version=1&sp=%2Ftriggers%2Fmanual%2Frun&sv=1.0&sig=lfGu8reb8dGM-e1OCf5oXPW_QOwDFqw8X8YZ5b6p1zM";
   
   const [paConfig, setPaConfig] = useState({
     urlPost: localStorage.getItem('pa_url_post') || DEFAULT_POST_URL,
