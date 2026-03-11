@@ -5,7 +5,7 @@ import {
   Star, Bell, X, Settings, Trash2, UserPlus,
   TableProperties, FilePlus2, RefreshCw, Loader2, Database,
   BarChart3, Target, TrendingUp, CalendarX, Moon, Layers, Activity,
-  Search, Filter, ChevronUp, ChevronDown, Terminal, Edit2, Megaphone, Globe, ExternalLink
+  Search, Filter, ChevronUp, ChevronDown, Terminal, Edit2, Megaphone, Globe, ExternalLink, Link as LinkIcon, Download
 } from 'lucide-react';
 
 export default function App() {
@@ -22,7 +22,8 @@ export default function App() {
     fecha_seguimiento_dia: '', jornada_seguimiento: '', hora_seguimiento: '',
     accion: '', estado_orden: 'Abierta', fecha_cierre: '',
     observaciones: '', datos_adjuntos: [],
-    programar_recordatorio: false, canal_recordatorio: 'email'
+    programar_recordatorio: false, canal_recordatorio: 'email',
+    link_adjuntos: ''
   };
 
   const [formData, setFormData] = useState(initialState);
@@ -402,7 +403,7 @@ export default function App() {
         }
       }
 
-      // Recordatorio local
+      // Recordatorio local (esto sigue siendo útil a nivel interfaz si lo usas)
       if (formData.programar_recordatorio && formData.fecha_seguimiento_dia) {
         const timeString = formData.hora_seguimiento || '00:00';
         const fechaSeg = new Date(`${formData.fecha_seguimiento_dia}T${timeString}:00`);
@@ -629,6 +630,43 @@ export default function App() {
       organicos, pauta, finDeSemana, fueraHorario, calificacionCount, lineasCount
     };
   }, [savedLeads, filterMes, reportFilterCalificacion]);
+
+  // --- Función para Descargar CSV de Métricas ---
+  const handleDownloadCSV = () => {
+    if (!reportes) return;
+
+    // Crear contenido CSV
+    const csvRows = [];
+    csvRows.push(['Metrica', 'Valor']);
+    csvRows.push(['Total Leads', reportes.total]);
+    csvRows.push(['Ventas Cerradas', reportes.ventasCerradas]);
+    csvRows.push(['Efectividad (%)', reportes.efectividadPorcentaje]);
+    csvRows.push(['Potenciales (Tibio/Caliente)', reportes.potenciales]);
+    csvRows.push(['Calificados', reportes.calificados]);
+    csvRows.push(['No Calificados', reportes.noCalificados]);
+    csvRows.push(['Organico / SEO', reportes.organicos]);
+    csvRows.push(['Pauta / Pago', reportes.pauta]);
+    csvRows.push(['Fuera de Horario', reportes.fueraHorario]);
+    csvRows.push(['Fin de Semana', reportes.finDeSemana]);
+    
+    csvRows.push([]);
+    csvRows.push(['Desglose por Calificacion', 'Cantidad']);
+    Object.entries(reportes.calificacionCount).forEach(([k, v]) => csvRows.push([k, v]));
+
+    csvRows.push([]);
+    csvRows.push(['Lineas de Interes Solicitadas', 'Cantidad']);
+    Object.entries(reportes.lineasCount).forEach(([k, v]) => csvRows.push([k, v]));
+
+    const csvContent = csvRows.map(e => e.join(",")).join("\n");
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.setAttribute("href", url);
+    link.setAttribute("download", `Metricas_Embudo_${new Date().toLocaleDateString()}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
 
   // Componente de Formulario (Reutilizado para Nuevo y Edición en Modal)
   const FormFields = () => (
@@ -1141,15 +1179,22 @@ export default function App() {
                         <td className="p-4 text-center font-mono font-medium">{lead.tiempo_respuesta_hrs || '-'} h</td>
                         <td className="p-4 text-center">
                           {lead.link_adjuntos ? (
-                            <a href={lead.link_adjuntos} target="_blank" rel="noopener noreferrer" className="text-black font-bold text-[10px] uppercase tracking-wider underline hover:text-zinc-600 transition-colors">
-                              🔗 Ver Enlace
+                            <a 
+                              href={lead.link_adjuntos} 
+                              target="_blank" 
+                              rel="noopener noreferrer" 
+                              className="inline-flex items-center justify-center p-2 text-blue-600 hover:text-blue-800 hover:bg-blue-50 rounded-full transition-colors"
+                              title="Abrir adjuntos"
+                            >
+                              <LinkIcon size={18} />
                             </a>
-                          ) : lead.datos_adjuntos && lead.datos_adjuntos.length > 0 ? (
-                            <span className="text-zinc-600 text-[10px] font-bold uppercase tracking-wider" title={lead.datos_adjuntos.map(f => f.name || 'Archivo').join(', ')}>
-                              {lead.datos_adjuntos.length} Archivo(s)
-                            </span>
                           ) : (
-                            <span className="text-zinc-400">-</span>
+                            <div 
+                              className="inline-flex items-center justify-center p-2 text-zinc-300 cursor-not-allowed"
+                              title="Sin adjuntos"
+                            >
+                              <LinkIcon size={18} />
+                            </div>
                           )}
                         </td>
                         <td className="p-4 text-center border-l border-zinc-200 bg-zinc-50 group-hover:bg-zinc-100 transition-colors">
@@ -1221,6 +1266,19 @@ export default function App() {
                </h2>
                
                <div className="flex flex-wrap items-center gap-4">
+                 {/* Botón de Descarga CSV */}
+                 <button 
+                   onClick={handleDownloadCSV}
+                   disabled={!reportes}
+                   className="flex items-center gap-2 bg-blue-50 text-blue-700 hover:bg-blue-100 hover:text-blue-800 border border-blue-200 px-4 py-2.5 rounded-sm text-xs font-bold uppercase tracking-widest transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                   title="Descargar Reporte en CSV"
+                 >
+                   <Download size={16} />
+                   <span className="hidden sm:inline">Descargar CSV</span>
+                 </button>
+                 
+                 <div className="w-px h-8 bg-zinc-200 hidden md:block"></div>
+
                  {/* Filtro Mes (Global) */}
                  <div className="flex items-center gap-2">
                    <label className="text-xs font-bold text-zinc-500 uppercase tracking-widest hidden sm:block">Mes:</label>
