@@ -89,7 +89,12 @@ export default function App() {
   const [reportFilterCalificacion, setReportFilterCalificacion] = useState(''); // Nuevo filtro de reportes
   const [sortConfig, setSortConfig] = useState({ key: 'fecha_ingreso', direction: 'descending' });
 
-  // --- Módulo de Administración y Configuración ---
+  // --- Módulo de Administración y Configuración (con localStorage y Dinamismo) ---
+  const getInitialList = (key, defaultList) => {
+    const savedList = localStorage.getItem(key);
+    return savedList ? JSON.parse(savedList) : defaultList;
+  };
+
   const defaultAsesores = [
     'Francisco Galeano', 'Catalina Arevalo', 'Juan Mora',
     'David Naranjo', 'Sandra Ortiz', 'Paola Cardenas',
@@ -98,25 +103,25 @@ export default function App() {
 
   const defaultLineas = [
     'Iluminacion', 'Baños', 'General', 'Porcelanatos', 'Cocinas', 'Poliform'
-  ].sort((a, b) => a.localeCompare(b));
+  ];
 
   const defaultAcciones = [
     'Agendar Cita', 'Cotizacion', 'Envio Catalogo', 'Venta', 'Mensaje Cierre', 'Primer Contacto'
-  ].sort((a, b) => a.localeCompare(b));
+  ];
 
   const defaultFuentes = [
     'ING PAID', 'FB PAID', 'SM ORGANIC', 'GOOGLE SEARCH', 'GOOGLE ORGANIC'
-  ].sort((a, b) => a.localeCompare(b));
+  ];
 
   const defaultCampanias = [
     'Hansgrohe'
-  ].sort((a, b) => a.localeCompare(b));
+  ];
   
-  const [asesoresList, setAsesoresList] = useState(defaultAsesores);
-  const [lineasList, setLineasList] = useState(defaultLineas);
-  const [accionesList, setAccionesList] = useState(defaultAcciones);
-  const [fuentesList, setFuentesList] = useState(defaultFuentes);
-  const [campaniasList, setCampaniasList] = useState(defaultCampanias);
+  const [asesoresList, setAsesoresList] = useState(() => getInitialList('asesoresList', defaultAsesores).sort((a, b) => a.localeCompare(b)));
+  const [lineasList, setLineasList] = useState(() => getInitialList('lineasList', defaultLineas).sort((a, b) => a.localeCompare(b)));
+  const [accionesList, setAccionesList] = useState(() => getInitialList('accionesList', defaultAcciones).sort((a, b) => a.localeCompare(b)));
+  const [fuentesList, setFuentesList] = useState(() => getInitialList('fuentesList', defaultFuentes).sort((a, b) => a.localeCompare(b)));
+  const [campaniasList, setCampaniasList] = useState(() => getInitialList('campaniasList', defaultCampanias).sort((a, b) => a.localeCompare(b)));
   
   const [showAdminModal, setShowAdminModal] = useState(false);
   const [adminTab, setAdminTab] = useState('asesores'); // 'asesores' | 'lineas' | 'acciones' | 'fuentes' | 'campanias' | 'integracion'
@@ -126,6 +131,13 @@ export default function App() {
   const [newAccionName, setNewAccionName] = useState('');
   const [newFuenteName, setNewFuenteName] = useState('');
   const [newCampaniaName, setNewCampaniaName] = useState('');
+
+  // Efectos para guardar las listas en localStorage cuando cambian
+  useEffect(() => { localStorage.setItem('asesoresList', JSON.stringify(asesoresList)); }, [asesoresList]);
+  useEffect(() => { localStorage.setItem('lineasList', JSON.stringify(lineasList)); }, [lineasList]);
+  useEffect(() => { localStorage.setItem('accionesList', JSON.stringify(accionesList)); }, [accionesList]);
+  useEffect(() => { localStorage.setItem('fuentesList', JSON.stringify(fuentesList)); }, [fuentesList]);
+  useEffect(() => { localStorage.setItem('campaniasList', JSON.stringify(campaniasList)); }, [campaniasList]);
 
   // Configuración de Power Automate
   const DEFAULT_POST_URL = "https://default2dad2f4230e64fe8adc416a2300053.14.environment.api.powerplatform.com:443/powerautomate/automations/direct/workflows/eb80d7bc6701476b8fcc8a81b004b87b/triggers/manual/paths/invoke?api-version=1&sp=%2Ftriggers%2Fmanual%2Frun&sv=1.0&sig=7mnm_UEBbdPHBLJzOgUDdnQM_jLP5szOIvH8yiwyNw0";
@@ -156,10 +168,10 @@ export default function App() {
     }, 3000);
   };
 
-  // Funciones Asesores, Líneas, Acciones, Fuentes y Campañas
+  // Funciones manuales para agregar/quitar de configuración
   const handleAddAsesor = () => {
     if (newAsesorName.trim() && !asesoresList.includes(newAsesorName.trim())) {
-      setAsesoresList([...asesoresList, newAsesorName.trim()]);
+      setAsesoresList([...asesoresList, newAsesorName.trim()].sort((a, b) => a.localeCompare(b)));
       setNewAsesorName('');
     }
   };
@@ -219,6 +231,34 @@ export default function App() {
   const handleRemoveCampania = (campaniaToRemove) => {
     setCampaniasList(campaniasList.filter(c => c !== campaniaToRemove));
     if (formData.campania === campaniaToRemove) setFormData(prev => ({ ...prev, campania: '' }));
+  };
+
+  // --- Lógica para extraer opciones dinámicas de los datos (GET) ---
+  const extractDynamicOptions = (leadsData) => {
+    if (!leadsData || leadsData.length === 0) return;
+
+    let newAsesores = new Set(asesoresList);
+    let newLineas = new Set(lineasList);
+    let newAcciones = new Set(accionesList);
+    let newFuentes = new Set(fuentesList);
+    let newCampanias = new Set(campaniasList);
+
+    leadsData.forEach(lead => {
+      if (lead.asesor && lead.asesor.trim() !== '') newAsesores.add(lead.asesor.trim());
+      if (lead.linea_interes && lead.linea_interes.trim() !== '') newLineas.add(lead.linea_interes.trim());
+      if (lead.accion && lead.accion.trim() !== '') newAcciones.add(lead.accion.trim());
+      if (lead.fuente_medio && lead.fuente_medio.trim() !== '') newFuentes.add(lead.fuente_medio.trim().toUpperCase());
+      if (lead.campania && lead.campania.trim() !== '') newCampanias.add(lead.campania.trim());
+    });
+
+    // Actualizamos los estados si hay cambios, y los ordenamos alfabéticamente
+    if (newAsesores.size !== asesoresList.length) setAsesoresList(Array.from(newAsesores).sort((a, b) => a.localeCompare(b)));
+    if (newLineas.size !== lineasList.length) setLineasList(Array.from(newLineas).sort((a, b) => a.localeCompare(b)));
+    if (newAcciones.size !== accionesList.length) setAccionesList(Array.from(newAcciones).sort((a, b) => a.localeCompare(b)));
+    if (newFuentes.size !== fuentesList.length) setFuentesList(Array.from(newFuentes).sort((a, b) => a.localeCompare(b)));
+    if (newCampanias.size !== campaniasList.length) setCampaniasList(Array.from(newCampanias).sort((a, b) => a.localeCompare(b)));
+    
+    addLog('Listas de configuración actualizadas dinámicamente según los datos de SharePoint.', 'info');
   };
 
   // Efecto: Cálculo de tiempo de respuesta
@@ -357,7 +397,7 @@ export default function App() {
         }
       }
 
-      // Recordatorio local
+      // Recordatorio local (esto sigue siendo útil a nivel interfaz si lo usas)
       if (formData.programar_recordatorio && formData.fecha_seguimiento_dia) {
         const timeString = formData.hora_seguimiento || '00:00';
         const fechaSeg = new Date(`${formData.fecha_seguimiento_dia}T${timeString}:00`);
@@ -423,6 +463,10 @@ export default function App() {
           const leads = Array.isArray(data) ? data : (Array.isArray(data?.value) ? data.value : []); 
           setSavedLeads(leads);
           addLog(`Carga exitosa: Se sincronizaron ${leads.length} registros desde SharePoint.`, 'success');
+          
+          // Extraer opciones dinámicamente de los nuevos datos
+          extractDynamicOptions(leads);
+
           // Solo mostramos toast de éxito si fue una carga manual
           if(currentView === 'data') showToast('Datos sincronizados correctamente.', 'success');
       } catch(parseError) {
