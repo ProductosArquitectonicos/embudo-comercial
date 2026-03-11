@@ -720,7 +720,7 @@ export default function App() {
                   </div>
                   <div>
                     <label className="block text-xs font-bold text-zinc-600 mb-2">Asesor Asignado</label>
-                    <select name="asesor" value={formData.asesor} onChange={handleChange} className="w-full rounded-sm border-zinc-300 border p-3 text-sm focus:ring-1 focus:ring-black focus:border-black outline-none bg-zinc-50 focus:bg-white transition-colors appearance-none cursor-pointer">
+                    <select name="asesor" value={formData.asesor} onChange={handleChange} className="w-full rounded-sm border-zinc-300 border p-3 text-sm focus:ring-1 focus:ring-black focus:border-black outline-none bg-zinc-50 focus:bg-white transition-colors cursor-pointer">
                       <option value="">Seleccionar...</option>
                       {asesoresList.map(asesor => <option key={asesor} value={asesor}>{asesor}</option>)}
                     </select>
