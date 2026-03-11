@@ -27,8 +27,9 @@ export default function App() {
 
   const [formData, setFormData] = useState(initialState);
   const [savedLeads, setSavedLeads] = useState([]);
-  const [showSuccess, setShowSuccess] = useState(false);
-  const [successMessage, setSuccessMessage] = useState(''); // Mensaje dinámico para la alerta
+  
+  // --- Estados de Alertas (Toast) ---
+  const [toastAlert, setToastAlert] = useState({ show: false, message: '', type: 'success' }); // type: 'success' | 'error'
   const [scheduledReminder, setScheduledReminder] = useState(null);
   
   // Vistas y Cargas
@@ -47,6 +48,16 @@ export default function App() {
       const newLogs = [{ time: new Date().toLocaleTimeString(), message, type }, ...prev];
       return newLogs.slice(0, 100); // Conservar solo los últimos 100 registros
     });
+  };
+
+  // Función auxiliar para mostrar el Toast
+  const showToast = (message, type = 'success') => {
+    setToastAlert({ show: true, message, type });
+    // Autocerrar después de 5 segundos
+    setTimeout(() => {
+      setToastAlert({ show: false, message: '', type: 'success' });
+      setScheduledReminder(null); // Limpiar recordatorio si lo hubiera
+    }, 5000);
   };
 
   useEffect(() => {
@@ -118,6 +129,7 @@ export default function App() {
 
   // Configuración de Power Automate
   const DEFAULT_POST_URL = "https://default2dad2f4230e64fe8adc416a2300053.14.environment.api.powerplatform.com:443/powerautomate/automations/direct/workflows/eb80d7bc6701476b8fcc8a81b004b87b/triggers/manual/paths/invoke?api-version=1&sp=%2Ftriggers%2Fmanual%2Frun&sv=1.0&sig=7mnm_UEBbdPHBLJzOgUDdnQM_jLP5szOIvH8yiwyNw0";
+  // NUEVA URL GET ACTUALIZADA
   const DEFAULT_GET_URL = "https://default2dad2f4230e64fe8adc416a2300053.14.environment.api.powerplatform.com:443/powerautomate/automations/direct/workflows/c3760089aa194bffab0b4997b56ed1d1/triggers/manual/paths/invoke?api-version=1&sp=%2Ftriggers%2Fmanual%2Frun&sv=1.0&sig=lfGu8reb8dGM-e1OCf5oXPW_QOwDFqw8X8YZ5b6p1zM";
   
   const [paConfig, setPaConfig] = useState({
@@ -138,6 +150,7 @@ export default function App() {
     localStorage.setItem('pa_url_put', paConfig.urlPut);
     setSaveConfigSuccess(true);
     addLog('Configuración de URLs guardada localmente.', 'success');
+    showToast('Configuración de integración guardada.', 'success');
     setTimeout(() => {
       setSaveConfigSuccess(false);
     }, 3000);
@@ -310,11 +323,15 @@ export default function App() {
             body: JSON.stringify(payload)
           });
           if (!response.ok) throw new Error(`HTTP Error: ${response.status}`);
+          
           addLog('Registro actualizado en SharePoint exitosamente.', 'success');
-          setSuccessMessage('Registro actualizado exitosamente en SharePoint.');
+          // Disparar toast de éxito
+          showToast('Registro actualizado exitosamente en SharePoint.', 'success');
+          
         } else {
           addLog('No se configuró URL de actualización. No se enviaron los cambios.', 'error');
-          alert("Debes configurar la URL de actualización en los ajustes.");
+          showToast("Debes configurar la URL de actualización en los ajustes.", 'error');
+          setIsSubmitting(false);
           return;
         }
       } else {
@@ -327,16 +344,20 @@ export default function App() {
             body: JSON.stringify(payload)
           });
           if (!response.ok) throw new Error(`HTTP Error: ${response.status}`);
+          
           addLog('Registro guardado y enviado a SharePoint exitosamente.', 'success');
-          setSuccessMessage('Lead guardado y enviado a SharePoint exitosamente.');
+          // Disparar toast de éxito
+          showToast('Lead guardado y enviado a SharePoint exitosamente.', 'success');
+          
         } else {
            addLog('Error: No hay URL POST configurada.', 'error');
-           alert("No has configurado la URL para enviar datos (POST).");
+           showToast("No has configurado la URL para enviar datos (POST).", 'error');
+           setIsSubmitting(false);
            return;
         }
       }
 
-      // Recordatorio local (esto sigue siendo útil a nivel interfaz si lo usas)
+      // Recordatorio local
       if (formData.programar_recordatorio && formData.fecha_seguimiento_dia) {
         const timeString = formData.hora_seguimiento || '00:00';
         const fechaSeg = new Date(`${formData.fecha_seguimiento_dia}T${timeString}:00`);
@@ -349,7 +370,7 @@ export default function App() {
         addLog(`Recordatorio programado para ${fechaSeg.toLocaleString()}`, 'info');
       }
       
-      setShowSuccess(true);
+      // Limpieza de estados post-guardado exitoso
       setFormData(initialState);
       if(editingLeadId) {
          setShowEditModal(false);
@@ -357,18 +378,17 @@ export default function App() {
       setEditingLeadId(null);
 
       // Despues de enviar (nuevo o actualización), intentamos traer los datos actualizados de SharePoint
-      setTimeout(() => fetchLeadsData(), 1000); // Pequeña pausa para asegurar que SP guardó
-      
+      // Añadimos un pequeño retraso para asegurar que Power Automate haya terminado de guardar antes de consultar
       setTimeout(() => {
-        setShowSuccess(false);
-        setSuccessMessage('');
-        setScheduledReminder(null);
-      }, 5000);
-
+        if(currentView === 'data' || currentView === 'reports'){
+            fetchLeadsData();
+        }
+      }, 1500); 
+      
     } catch (error) {
       console.error("Error al procesar:", error);
       addLog(`Fallo al procesar datos: ${error.message}`, 'error');
-      alert(`Hubo un error al ${editingLeadId ? 'actualizar' : 'enviar'} los datos. Revisa los logs o la URL.`);
+      showToast(`Hubo un error al ${editingLeadId ? 'actualizar' : 'enviar'} los datos. Revisa los logs.`, 'error');
     } finally {
       setIsSubmitting(false);
     }
@@ -377,6 +397,7 @@ export default function App() {
   const fetchLeadsData = async () => {
     if (!paConfig.urlGet) {
       addLog('Error: Intento de cargar datos sin URL GET configurada.', 'error');
+      showToast("No hay una URL GET configurada para obtener datos.", 'error');
       return;
     }
 
@@ -385,7 +406,7 @@ export default function App() {
     try {
       const response = await fetch(paConfig.urlGet);
       if (!response.ok) {
-         throw new Error(`HTTP Status: ${response.status}`);
+         throw new Error(`HTTP Status: ${response.status} - Verifica permisos o URL.`);
       }
 
       const textData = await response.text();
@@ -402,6 +423,8 @@ export default function App() {
           const leads = Array.isArray(data) ? data : (Array.isArray(data?.value) ? data.value : []); 
           setSavedLeads(leads);
           addLog(`Carga exitosa: Se sincronizaron ${leads.length} registros desde SharePoint.`, 'success');
+          // Solo mostramos toast de éxito si fue una carga manual
+          if(currentView === 'data') showToast('Datos sincronizados correctamente.', 'success');
       } catch(parseError) {
           console.error("Error analizando JSON:", textData);
           throw new Error("El formato devuelto por Power Automate no es un JSON válido.");
@@ -410,14 +433,15 @@ export default function App() {
     } catch (error) {
       console.error("Error al obtener datos:", error);
       addLog(`Fallo al cargar datos: ${error.message}`, 'error');
-      alert("Error al obtener los datos de SharePoint/Power Automate. Revisa los logs para más detalle.");
+      showToast(`Error al cargar datos: ${error.message}`, 'error');
     } finally {
       setIsLoadingData(false);
     }
   };
 
+  // Cargar datos iniciales al entrar a la vista de tabla o reportes si está vacío
   useEffect(() => {
-    if (currentView === 'data' && paConfig.urlGet && savedLeads.length === 0) {
+    if ((currentView === 'data' || currentView === 'reports') && paConfig.urlGet && savedLeads.length === 0) {
       fetchLeadsData();
     }
   }, [currentView]);
@@ -882,20 +906,20 @@ export default function App() {
         </header>
 
         {/* ALERTA DE ÉXITO GLOBAL FLOTANTE (TOAST) */}
-        {showSuccess && (
+        {toastAlert.show && (
           <div className="fixed top-6 right-6 z-50 space-y-2 animate-in slide-in-from-top-2 fade-in duration-300 max-w-sm w-full">
-            <div className="bg-black text-white p-4 rounded-sm border-l-4 border-zinc-400 flex items-start gap-3 shadow-2xl">
-              <CheckCircle size={20} className="text-zinc-300 shrink-0 mt-0.5" />
+            <div className={`text-white p-4 rounded-sm border-l-4 flex items-start gap-3 shadow-2xl ${toastAlert.type === 'error' ? 'bg-red-600 border-red-800' : 'bg-black border-zinc-400'}`}>
+              {toastAlert.type === 'error' ? <X size={20} className="text-red-200 shrink-0 mt-0.5" /> : <CheckCircle size={20} className="text-zinc-300 shrink-0 mt-0.5" />}
               <div className="flex-1">
                  <span className="text-sm font-medium leading-tight block">
-                   {successMessage || 'Operación realizada exitosamente.'}
+                   {toastAlert.message}
                  </span>
               </div>
-              <button onClick={() => setShowSuccess(false)} className="text-zinc-400 hover:text-white shrink-0">
+              <button onClick={() => setToastAlert({ show: false, message: '', type: 'success' })} className="text-white/70 hover:text-white shrink-0">
                 <X size={16} />
               </button>
             </div>
-            {scheduledReminder && (
+            {scheduledReminder && toastAlert.type === 'success' && (
               <div className="bg-white text-black p-4 rounded-sm border-l-4 border-black flex items-center gap-3 shadow-xl border-y border-r border-zinc-200">
                 <Bell size={20} className="text-zinc-500 shrink-0" />
                 <span className="text-sm">Recordatorio programado para el <strong>{scheduledReminder.fecha}</strong> vía {scheduledReminder.canal}.</span>
