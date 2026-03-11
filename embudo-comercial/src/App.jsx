@@ -5,7 +5,7 @@ import {
   Star, Bell, X, Settings, Trash2, UserPlus,
   TableProperties, FilePlus2, RefreshCw, Loader2, Database,
   BarChart3, Target, TrendingUp, CalendarX, Moon, Layers, Activity,
-  Search, Filter, ChevronUp, ChevronDown, Terminal, Edit2, Megaphone, Globe
+  Search, Filter, ChevronUp, ChevronDown, Terminal, Edit2, Megaphone, Globe, ExternalLink
 } from 'lucide-react';
 
 export default function App() {
@@ -35,6 +35,7 @@ export default function App() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isLoadingData, setIsLoadingData] = useState(false);
   const [editingLeadId, setEditingLeadId] = useState(null); // Estado para saber si estamos editando
+  const [showEditModal, setShowEditModal] = useState(false); // Estado para mostrar el modal de edición
 
   // --- Logs del Sistema ---
   const [appLogs, setAppLogs] = useState([]);
@@ -57,11 +58,14 @@ export default function App() {
       if (e.key === 'Escape') {
         setShowAdminModal(false);
         setShowLogsModal(false);
+        if(showEditModal){
+          handleCancelEdit();
+        }
       }
     };
     document.addEventListener('keydown', handleEscape);
     return () => document.removeEventListener('keydown', handleEscape);
-  }, []);
+  }, [showEditModal]);
 
   // --- Estados de Filtros y Ordenamiento ---
   const [searchTerm, setSearchTerm] = useState('');
@@ -237,7 +241,7 @@ export default function App() {
 
   const convertFilesToBase64 = async (files) => {
     const promises = files.map(file => {
-      // Si el archivo ya es un link o ya fue procesado, se omite (esto pasa al editar)
+      // Si el archivo ya es un link o ya fue procesado, se omite
       if (!file.type && file.contentBytes) return Promise.resolve(file);
       if (!file.name) return Promise.resolve(null);
 
@@ -257,17 +261,16 @@ export default function App() {
     setFormData({
       ...initialState, // Asegurar estructura
       ...lead,
-      // Aseguramos que los adjuntos locales funcionen (generalmente no se pueden recargar inputs de tipo file, así que limpiamos o mantenemos info referencial)
       datos_adjuntos: lead.datos_adjuntos || [] 
     });
-    setCurrentView('form');
-    addLog(`Cargando registro [${lead.titulo || lead.id}] para edición.`, 'info');
+    setShowEditModal(true);
+    addLog(`Abriendo modal de edición para registro [${lead.titulo || lead.id}].`, 'info');
   };
 
   const handleCancelEdit = () => {
     setEditingLeadId(null);
     setFormData(initialState);
-    setCurrentView('data');
+    setShowEditModal(false);
     addLog('Edición cancelada.', 'warning');
   };
 
@@ -295,18 +298,17 @@ export default function App() {
         if (paConfig.urlPut) {
           addLog('Enviando solicitud de ACTUALIZACIÓN a Power Automate...', 'info');
           await fetch(paConfig.urlPut, {
-            method: 'POST', // Usamos POST para mayor compatibilidad con HTTP Trigger de PA, enviando el ID en el payload
+            method: 'POST', // Usamos POST para mayor compatibilidad con HTTP Trigger de PA
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(payload)
           });
           addLog('Registro actualizado en SharePoint exitosamente.', 'success');
+          // Ya NO actualizamos el estado local asumiendo éxito. Forzamos a que SharePoint sea la única fuente de verdad.
         } else {
-          addLog('Registro actualizado localmente (Falta URL de actualización).', 'warning');
+          addLog('No se configuró URL de actualización. No se enviaron los cambios.', 'error');
+          alert("Debes configurar la URL de actualización en los ajustes.");
+          return;
         }
-        
-        // Actualizar en el estado local
-        setSavedLeads(prev => prev.map(lead => lead.id === editingLeadId ? { ...payload, id: editingLeadId } : lead));
-        
       } else {
         // LÓGICA DE CREACIÓN (POST)
         if (paConfig.urlPost) {
@@ -317,14 +319,15 @@ export default function App() {
             body: JSON.stringify(payload)
           });
           addLog('Registro guardado y enviado a SharePoint exitosamente.', 'success');
+          // Eliminado: setSavedLeads([{ ...payload, id: Date.now() }, ...savedLeads]); -> Ahora no guardamos en memoria local simulada.
         } else {
-          addLog('Registro guardado localmente (Sin URL de SP configurada).', 'warning');
+           addLog('Error: No hay URL POST configurada.', 'error');
+           alert("No has configurado la URL para enviar datos (POST).");
+           return;
         }
-        // Guardar en el estado local
-        setSavedLeads([{ ...payload, id: Date.now() }, ...savedLeads]);
       }
 
-      // Recordatorio local
+      // Recordatorio local (esto sigue siendo útil a nivel interfaz si lo usas)
       if (formData.programar_recordatorio && formData.fecha_seguimiento_dia) {
         const timeString = formData.hora_seguimiento || '00:00';
         const fechaSeg = new Date(`${formData.fecha_seguimiento_dia}T${timeString}:00`);
@@ -339,7 +342,13 @@ export default function App() {
       
       setShowSuccess(true);
       setFormData(initialState);
+      if(editingLeadId) {
+         setShowEditModal(false);
+      }
       setEditingLeadId(null);
+
+      // Despues de enviar (nuevo o actualización), intentamos traer los datos actualizados de SharePoint
+      fetchLeadsData();
       
       setTimeout(() => {
         setShowSuccess(false);
@@ -369,7 +378,7 @@ export default function App() {
       const data = await response.json();
       const leads = Array.isArray(data) ? data : (data.value || []); 
       setSavedLeads(leads);
-      addLog(`Carga exitosa: Se sincronizaron ${leads.length} registros.`, 'success');
+      addLog(`Carga exitosa: Se sincronizaron ${leads.length} registros desde SharePoint.`, 'success');
     } catch (error) {
       console.error("Error al obtener datos:", error);
       addLog(`Fallo al cargar datos: ${error.message}`, 'error');
@@ -519,6 +528,255 @@ export default function App() {
     };
   }, [savedLeads, filterMes, reportFilterCalificacion]);
 
+  // Componente de Formulario (Reutilizado para Nuevo y Edición en Modal)
+  const FormFields = () => (
+    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 p-1">
+      {/* Información General */}
+      <div className="bg-white p-7 rounded-sm shadow-sm border border-zinc-200 space-y-6">
+        <div className="flex items-center gap-3 border-b border-zinc-100 pb-4">
+          <User className="text-black" size={18} />
+          <h2 className="text-sm font-bold tracking-wide text-zinc-800">Información del Lead</h2>
+        </div>
+        
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+          <div className="md:col-span-2">
+            <label className="block text-xs font-bold text-zinc-600 mb-2">Título / Nombre</label>
+            <input type="text" name="titulo" required value={formData.titulo} onChange={handleChange} className="w-full rounded-sm border-zinc-300 border p-3 text-sm focus:ring-1 focus:ring-black focus:border-black outline-none bg-zinc-50 focus:bg-white transition-colors" placeholder="Ej. Juan Pérez - Consulta Web" />
+          </div>
+          <div>
+            <label className="block text-xs font-bold text-zinc-600 mb-2">Celular</label>
+            <div className="relative">
+              <Phone className="absolute left-3 top-3 text-zinc-400" size={16} />
+              <input type="tel" name="celular" value={formData.celular} onChange={handleChange} className="w-full rounded-sm border-zinc-300 border p-3 pl-10 text-sm focus:ring-1 focus:ring-black focus:border-black outline-none bg-zinc-50 focus:bg-white transition-colors" placeholder="1234567890" />
+            </div>
+          </div>
+          <div>
+            <label className="block text-xs font-bold text-zinc-600 mb-2">Email</label>
+            <div className="relative">
+              <Mail className="absolute left-3 top-3 text-zinc-400" size={16} />
+              <input type="email" name="email" value={formData.email} onChange={handleChange} className="w-full rounded-sm border-zinc-300 border p-3 pl-10 text-sm focus:ring-1 focus:ring-black focus:border-black outline-none bg-zinc-50 focus:bg-white transition-colors" placeholder="correo@ejemplo.com" />
+            </div>
+          </div>
+          <div>
+            <label className="block text-xs font-bold text-zinc-600 mb-2">Fuente / Medio</label>
+            <select name="fuente_medio" value={formData.fuente_medio} onChange={handleChange} className="w-full rounded-sm border-zinc-300 border p-3 text-sm focus:ring-1 focus:ring-black focus:border-black outline-none bg-zinc-50 focus:bg-white transition-colors cursor-pointer">
+              <option value="">Seleccione...</option>
+              {fuentesList.map(fuente => (
+                <option key={fuente} value={fuente}>{fuente}</option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className="block text-xs font-bold text-zinc-600 mb-2">Campaña</label>
+            <select name="campania" value={formData.campania} onChange={handleChange} className="w-full rounded-sm border-zinc-300 border p-3 text-sm focus:ring-1 focus:ring-black focus:border-black outline-none bg-zinc-50 focus:bg-white transition-colors cursor-pointer">
+              <option value="">Seleccione...</option>
+              {campaniasList.map(campania => (
+                <option key={campania} value={campania}>{campania}</option>
+              ))}
+            </select>
+          </div>
+          <div className="md:col-span-2 border-t border-zinc-100 pt-3">
+            <label className="block text-xs font-bold text-zinc-600 mb-2">Línea de Interés</label>
+            <select name="linea_interes" value={formData.linea_interes} onChange={handleChange} className="w-full rounded-sm border-zinc-300 border p-3 text-sm focus:ring-1 focus:ring-black focus:border-black outline-none bg-zinc-50 focus:bg-white transition-colors cursor-pointer">
+              <option value="">No especificada</option>
+              {lineasList.map(linea => (
+                <option key={linea} value={linea}>{linea}</option>
+              ))}
+            </select>
+          </div>
+        </div>
+      </div>
+
+      {/* Tiempos y Control */}
+      <div className="bg-white p-7 rounded-sm shadow-sm border border-zinc-200 space-y-6">
+        <div className="flex items-center gap-3 border-b border-zinc-100 pb-4">
+          <Clock className="text-black" size={18} />
+          <h2 className="text-sm font-bold tracking-wide text-zinc-800">Gestión de Tiempos y Asignación</h2>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+          <div>
+            <label className="block text-xs font-bold text-zinc-600 mb-2">Fecha Ingreso</label>
+            <input type="datetime-local" name="fecha_ingreso" required value={formData.fecha_ingreso} onChange={handleChange} className="w-full rounded-sm border-zinc-300 border p-3 text-sm focus:ring-1 focus:ring-black focus:border-black outline-none bg-zinc-50 focus:bg-white transition-colors" />
+          </div>
+          <div>
+            <label className="block text-xs font-bold text-zinc-600 mb-2">Fecha Control</label>
+            <input type="datetime-local" name="fecha_control" value={formData.fecha_control} onChange={handleChange} className="w-full rounded-sm border-zinc-300 border p-3 text-sm focus:ring-1 focus:ring-black focus:border-black outline-none bg-zinc-50 focus:bg-white transition-colors" />
+          </div>
+          <div className="md:col-span-2">
+            <label className="block text-xs font-bold text-zinc-600 mb-2">Tiempo de Respuesta (Hrs)</label>
+            <div className="relative">
+              <input type="text" name="tiempo_respuesta_hrs" readOnly value={formData.tiempo_respuesta_hrs} className="w-full rounded-sm border-zinc-300 bg-zinc-100 text-black border p-3 text-sm font-mono font-semibold outline-none" placeholder="0.00" />
+              {formData.tiempo_respuesta_hrs && <span className="absolute right-3 top-3.5 text-xs font-bold bg-black text-white px-2 py-0.5 rounded-sm">Auto</span>}
+            </div>
+          </div>
+          <div>
+            <label className="block text-xs font-bold text-zinc-600 mb-2">Novedad Tiempo</label>
+            <select name="novedad_tiempo" value={formData.novedad_tiempo} onChange={handleChange} className="w-full rounded-sm border-zinc-300 border p-3 text-sm focus:ring-1 focus:ring-black focus:border-black outline-none bg-zinc-50 focus:bg-white transition-colors cursor-pointer">
+              <option value="">Seleccione...</option>
+              <option value="Ninguno">Ninguno</option>
+              <option value="Fuera de Horario">Fuera de Horario</option>
+              <option value="Fin de semana">Fin de semana</option>
+            </select>
+          </div>
+          <div>
+            <label className="block text-xs font-bold text-zinc-600 mb-2">Asesor Asignado</label>
+            <select name="asesor" value={formData.asesor} onChange={handleChange} className="w-full rounded-sm border-zinc-300 border p-3 text-sm focus:ring-1 focus:ring-black focus:border-black outline-none bg-zinc-50 focus:bg-white transition-colors cursor-pointer">
+              <option value="">Seleccionar...</option>
+              {asesoresList.map(asesor => <option key={asesor} value={asesor}>{asesor}</option>)}
+            </select>
+          </div>
+        </div>
+      </div>
+
+      {/* Seguimiento y Calificación */}
+      <div className="bg-white p-7 rounded-sm shadow-sm border border-zinc-200 space-y-6">
+        <div className="flex items-center gap-3 border-b border-zinc-100 pb-4">
+          <Star className="text-black" size={18} />
+          <h2 className="text-sm font-bold tracking-wide text-zinc-800">Calificación y Seguimiento</h2>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+          <div>
+            <label className="block text-xs font-bold text-zinc-600 mb-2">Estado</label>
+            <select name="estado" value={formData.estado} onChange={handleChange} className="w-full rounded-sm border-zinc-300 border p-3 text-sm focus:ring-1 focus:ring-black focus:border-black outline-none bg-zinc-50 focus:bg-white transition-colors cursor-pointer">
+              <option>Nuevo</option><option>Contactado</option><option>En Negociación</option><option>Perdido</option>
+            </select>
+          </div>
+          <div>
+            <label className="block text-xs font-bold text-zinc-600 mb-2">Calificación Lead</label>
+            <select name="calificacion_lead" value={formData.calificacion_lead} onChange={handleChange} className="w-full rounded-sm border-zinc-300 border p-3 text-sm focus:ring-1 focus:ring-black focus:border-black outline-none bg-zinc-50 focus:bg-white transition-colors cursor-pointer">
+              <option>Por evaluar</option><option>Frío</option><option>Tibio</option><option>Caliente</option>
+            </select>
+          </div>
+          <div className="md:col-span-2">
+            <label className="block text-xs font-bold text-zinc-600 mb-2">Razón Calificación</label>
+            <input type="text" name="razon_calificacion" value={formData.razon_calificacion} onChange={handleChange} className="w-full rounded-sm border-zinc-300 border p-3 text-sm focus:ring-1 focus:ring-black focus:border-black outline-none bg-zinc-50 focus:bg-white transition-colors" />
+          </div>
+          <div className="md:col-span-2">
+            <label className="block text-xs font-bold text-zinc-600 mb-2">Notas de Seguimiento</label>
+            <textarea name="notas_seguimiento" rows="2" value={formData.notas_seguimiento} onChange={handleChange} className="w-full rounded-sm border-zinc-300 border p-3 text-sm focus:ring-1 focus:ring-black focus:border-black outline-none bg-zinc-50 focus:bg-white transition-colors resize-none"></textarea>
+          </div>
+          <div>
+            <label className="block text-xs font-bold text-zinc-600 mb-2">Fecha Act. Nota</label>
+            <input type="date" name="fecha_actualizacion_nota" value={formData.fecha_actualizacion_nota} onChange={handleChange} className="w-full rounded-sm border-zinc-300 border p-3 text-sm focus:ring-1 focus:ring-black focus:border-black outline-none bg-zinc-50 focus:bg-white transition-colors" />
+          </div>
+          
+          {/* Nueva Programación de Seguimiento por Horas */}
+          <div className="md:col-span-2 grid grid-cols-1 sm:grid-cols-3 gap-4 border border-zinc-200 p-5 rounded-sm bg-zinc-50/50 mt-2">
+            <div className="sm:col-span-3">
+              <label className="block text-[10px] uppercase tracking-widest font-bold text-black border-b border-zinc-200 pb-2 mb-1 flex items-center gap-2">
+                 <Clock size={12} /> Programar Próximo Seguimiento
+              </label>
+            </div>
+            <div>
+              <label className="block text-[10px] font-bold text-zinc-500 uppercase tracking-widest mb-2">Fecha</label>
+              <input type="date" name="fecha_seguimiento_dia" value={formData.fecha_seguimiento_dia} onChange={handleChange} className="w-full rounded-sm border-zinc-300 border p-2.5 text-sm focus:ring-1 focus:ring-black focus:border-black outline-none bg-white transition-colors" />
+            </div>
+            <div>
+              <label className="block text-[10px] font-bold text-zinc-500 uppercase tracking-widest mb-2">Jornada</label>
+              <select name="jornada_seguimiento" value={formData.jornada_seguimiento} onChange={handleChange} className="w-full rounded-sm border-zinc-300 border p-2.5 text-sm focus:ring-1 focus:ring-black focus:border-black outline-none bg-white transition-colors cursor-pointer">
+                <option value="">Seleccione...</option>
+                <option value="Mañana">Mañana</option>
+                <option value="Tarde">Tarde</option>
+                <option value="Noche">Noche</option>
+              </select>
+            </div>
+            <div>
+              <label className="block text-[10px] font-bold text-zinc-500 uppercase tracking-widest mb-2">Hora Exacta</label>
+              <input type="time" name="hora_seguimiento" value={formData.hora_seguimiento} onChange={handleChange} className="w-full rounded-sm border-zinc-300 border p-2.5 text-sm focus:ring-1 focus:ring-black focus:border-black outline-none bg-white transition-colors" />
+            </div>
+          </div>
+
+          <div className="md:col-span-2 bg-zinc-50 p-4 rounded-sm border border-zinc-200 flex flex-col sm:flex-row items-start sm:items-center gap-4 mt-2">
+            <div className="flex items-center gap-3">
+              <input type="checkbox" id="recordatorio" name="programar_recordatorio" checked={formData.programar_recordatorio} onChange={handleChange} className="w-4 h-4 text-black rounded-sm border-zinc-400 focus:ring-black cursor-pointer" />
+              <label htmlFor="recordatorio" className="text-sm font-bold text-zinc-700 flex items-center gap-2 cursor-pointer">
+                <Bell size={16} className={formData.programar_recordatorio ? "text-black" : "text-zinc-400"} /> 
+                Programar recordatorio (1 día antes)
+              </label>
+            </div>
+            {formData.programar_recordatorio && (
+              <div className="flex items-center gap-2 sm:border-l border-zinc-300 sm:pl-4">
+                <span className="text-xs text-zinc-500 font-bold">Vía:</span>
+                <select name="canal_recordatorio" value={formData.canal_recordatorio} onChange={handleChange} className="text-sm rounded-sm border-zinc-300 p-1.5 focus:ring-1 focus:ring-black outline-none bg-white font-bold text-black cursor-pointer">
+                  <option value="email">Correo</option><option value="teams">Teams</option>
+                </select>
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* Cierre e Información de Adjuntos */}
+      <div className="bg-white p-7 rounded-sm shadow-sm border border-zinc-200 space-y-6">
+        <div className="flex items-center gap-3 border-b border-zinc-100 pb-4">
+          <CheckCircle className="text-black" size={18} />
+          <h2 className="text-sm font-bold tracking-wide text-zinc-800">Cierre y Conclusión</h2>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+          <div>
+            <label className="block text-xs font-bold text-zinc-600 mb-2">Acción Requerida</label>
+            <select name="accion" value={formData.accion} onChange={handleChange} className="w-full rounded-sm border-zinc-300 border p-3 text-sm focus:ring-1 focus:ring-black focus:border-black outline-none bg-zinc-50 focus:bg-white transition-colors cursor-pointer">
+              <option value="">Seleccione...</option>
+              {accionesList.map(accion => (
+                <option key={accion} value={accion}>{accion}</option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className="block text-xs font-bold text-zinc-600 mb-2">Estado de la Orden</label>
+            <select name="estado_orden" value={formData.estado_orden} onChange={handleChange} className="w-full rounded-sm border-zinc-300 border p-3 text-sm focus:ring-1 focus:ring-black focus:border-black outline-none bg-zinc-50 focus:bg-white transition-colors cursor-pointer">
+              <option value="Abierta">Abierta</option><option value="Cerrada">Cerrada</option>
+            </select>
+          </div>
+          <div>
+            <label className="block text-xs font-bold text-zinc-600 mb-2">Fecha de Cierre</label>
+            <input type="datetime-local" name="fecha_cierre" value={formData.fecha_cierre} onChange={handleChange} className="w-full rounded-sm border-zinc-300 border p-3 text-sm focus:ring-1 focus:ring-black focus:border-black outline-none bg-zinc-50 focus:bg-white transition-colors" />
+          </div>
+          <div>
+            <label className="block text-xs font-bold text-zinc-600 mb-2">Datos Adjuntos Nuevos</label>
+            <input type="file" name="datos_adjuntos" multiple onChange={handleFileChange} className="w-full text-sm text-zinc-500 file:mr-4 file:py-2.5 file:px-4 file:rounded-sm file:border file:border-zinc-300 file:text-sm file:font-bold file:bg-zinc-50 file:text-black hover:file:bg-zinc-200 transition cursor-pointer" />
+            {formData.datos_adjuntos && formData.datos_adjuntos.length > 0 && (
+              <div className="mt-3 space-y-2">
+                {formData.datos_adjuntos.map((file, index) => (
+                  <div key={index} className="flex items-center justify-between bg-zinc-50 border border-zinc-200 rounded-sm p-2.5 text-sm">
+                    <span className="truncate max-w-[150px] font-medium text-black">{file.name || 'Archivo adjunto'}</span>
+                    <button type="button" onClick={() => removeFile(index)} className="text-zinc-400 hover:text-black transition-colors"><X size={14} /></button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+          <div className="md:col-span-2">
+            <label className="block text-xs font-bold text-zinc-600 mb-2">Observaciones Finales</label>
+            <textarea name="observaciones" rows="2" value={formData.observaciones} onChange={handleChange} className="w-full rounded-sm border-zinc-300 border p-3 text-sm focus:ring-1 focus:ring-black focus:border-black outline-none bg-zinc-50 focus:bg-white transition-colors resize-none"></textarea>
+          </div>
+          
+          {/* Visualización de Enlace de Archivo Existente (Solo en modo edición) */}
+          {editingLeadId && formData.link_adjuntos && (
+             <div className="md:col-span-2 bg-blue-50 border border-blue-200 p-4 rounded-sm flex items-start gap-3 mt-2">
+                <FileText className="text-blue-500 shrink-0 mt-0.5" size={18} />
+                <div>
+                   <h4 className="text-xs font-bold text-blue-900 uppercase tracking-widest mb-1">Archivos Previos en SharePoint</h4>
+                   <p className="text-sm text-blue-700 mb-2">Este lead ya contiene archivos guardados en el sistema.</p>
+                   <a 
+                      href={formData.link_adjuntos} 
+                      target="_blank" 
+                      rel="noopener noreferrer" 
+                      className="inline-flex items-center gap-2 text-xs font-bold bg-blue-600 text-white px-3 py-1.5 rounded-sm hover:bg-blue-700 transition-colors"
+                   >
+                     Ver Archivos en SharePoint <ExternalLink size={14} />
+                   </a>
+                </div>
+             </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+
   return (
     <div className="min-h-screen bg-[#F8F9FA] text-zinc-900 p-4 md:p-8 font-sans selection:bg-zinc-300">
       <div className="max-w-7xl mx-auto space-y-6">
@@ -558,7 +816,7 @@ export default function App() {
                 }}
                 className={`flex-1 lg:flex-none flex items-center justify-center gap-2 px-5 py-2 rounded-sm font-bold text-sm transition-all ${currentView === 'form' ? 'bg-black shadow-sm text-white' : 'text-zinc-500 hover:text-black'}`}
               >
-                <FilePlus2 size={16} /> {editingLeadId ? 'Editar' : 'Nuevo'}
+                <FilePlus2 size={16} /> Nuevo
               </button>
               <button 
                 onClick={() => setCurrentView('data')}
@@ -600,7 +858,7 @@ export default function App() {
             <div className="bg-black text-white p-4 rounded-sm border-l-4 border-zinc-400 flex items-center gap-3 shadow-lg">
               <CheckCircle size={20} className="text-zinc-300" />
               <span className="text-sm font-medium">
-                {editingLeadId ? 'Registro actualizado exitosamente.' : 'Lead guardado y enviado a SharePoint exitosamente.'}
+                Lead guardado y enviado a SharePoint exitosamente.
               </span>
             </div>
             {scheduledReminder && (
@@ -613,258 +871,15 @@ export default function App() {
         )}
 
         {/* =========================================
-            VISTA 1: FORMULARIO DE REGISTRO / EDICIÓN
+            VISTA 1: FORMULARIO DE REGISTRO NUEVO
         ============================================= */}
-        {currentView === 'form' && (
+        {currentView === 'form' && !showEditModal && (
           <form onSubmit={handleSubmit} className="space-y-6 animate-in fade-in duration-300">
-            {/* Header especial si está en modo edición */}
-            {editingLeadId && (
-              <div className="bg-zinc-800 text-white p-4 rounded-sm flex items-center justify-between border-l-4 border-black shadow-sm">
-                <div className="flex items-center gap-3">
-                  <Edit2 size={20} className="text-zinc-300" />
-                  <span className="text-sm font-bold uppercase tracking-wider">Modo Edición Activado</span>
-                </div>
-                <span className="text-xs text-zinc-400 font-mono">ID: {editingLeadId}</span>
-              </div>
-            )}
-
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              
-              {/* Información General */}
-              <div className="bg-white p-7 rounded-sm shadow-sm border border-zinc-200 space-y-6">
-                <div className="flex items-center gap-3 border-b border-zinc-100 pb-4">
-                  <User className="text-black" size={18} />
-                  <h2 className="text-sm font-bold tracking-wide text-zinc-800">Información del Lead</h2>
-                </div>
-                
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-                  <div className="md:col-span-2">
-                    <label className="block text-xs font-bold text-zinc-600 mb-2">Título / Nombre</label>
-                    <input type="text" name="titulo" required value={formData.titulo} onChange={handleChange} className="w-full rounded-sm border-zinc-300 border p-3 text-sm focus:ring-1 focus:ring-black focus:border-black outline-none bg-zinc-50 focus:bg-white transition-colors" placeholder="Ej. Juan Pérez - Consulta Web" />
-                  </div>
-                  <div>
-                    <label className="block text-xs font-bold text-zinc-600 mb-2">Celular</label>
-                    <div className="relative">
-                      <Phone className="absolute left-3 top-3 text-zinc-400" size={16} />
-                      <input type="tel" name="celular" value={formData.celular} onChange={handleChange} className="w-full rounded-sm border-zinc-300 border p-3 pl-10 text-sm focus:ring-1 focus:ring-black focus:border-black outline-none bg-zinc-50 focus:bg-white transition-colors" placeholder="1234567890" />
-                    </div>
-                  </div>
-                  <div>
-                    <label className="block text-xs font-bold text-zinc-600 mb-2">Email</label>
-                    <div className="relative">
-                      <Mail className="absolute left-3 top-3 text-zinc-400" size={16} />
-                      <input type="email" name="email" value={formData.email} onChange={handleChange} className="w-full rounded-sm border-zinc-300 border p-3 pl-10 text-sm focus:ring-1 focus:ring-black focus:border-black outline-none bg-zinc-50 focus:bg-white transition-colors" placeholder="correo@ejemplo.com" />
-                    </div>
-                  </div>
-                  <div>
-                    <label className="block text-xs font-bold text-zinc-600 mb-2">Fuente / Medio</label>
-                    <select name="fuente_medio" value={formData.fuente_medio} onChange={handleChange} className="w-full rounded-sm border-zinc-300 border p-3 text-sm focus:ring-1 focus:ring-black focus:border-black outline-none bg-zinc-50 focus:bg-white transition-colors cursor-pointer">
-                      <option value="">Seleccione...</option>
-                      {fuentesList.map(fuente => (
-                        <option key={fuente} value={fuente}>{fuente}</option>
-                      ))}
-                    </select>
-                  </div>
-                  <div>
-                    <label className="block text-xs font-bold text-zinc-600 mb-2">Campaña</label>
-                    <select name="campania" value={formData.campania} onChange={handleChange} className="w-full rounded-sm border-zinc-300 border p-3 text-sm focus:ring-1 focus:ring-black focus:border-black outline-none bg-zinc-50 focus:bg-white transition-colors cursor-pointer">
-                      <option value="">Seleccione...</option>
-                      {campaniasList.map(campania => (
-                        <option key={campania} value={campania}>{campania}</option>
-                      ))}
-                    </select>
-                  </div>
-                  <div className="md:col-span-2 border-t border-zinc-100 pt-3">
-                    <label className="block text-xs font-bold text-zinc-600 mb-2">Línea de Interés</label>
-                    <select name="linea_interes" value={formData.linea_interes} onChange={handleChange} className="w-full rounded-sm border-zinc-300 border p-3 text-sm focus:ring-1 focus:ring-black focus:border-black outline-none bg-zinc-50 focus:bg-white transition-colors cursor-pointer">
-                      <option value="">No especificada</option>
-                      {lineasList.map(linea => (
-                        <option key={linea} value={linea}>{linea}</option>
-                      ))}
-                    </select>
-                  </div>
-                </div>
-              </div>
-
-              {/* Tiempos y Control */}
-              <div className="bg-white p-7 rounded-sm shadow-sm border border-zinc-200 space-y-6">
-                <div className="flex items-center gap-3 border-b border-zinc-100 pb-4">
-                  <Clock className="text-black" size={18} />
-                  <h2 className="text-sm font-bold tracking-wide text-zinc-800">Gestión de Tiempos y Asignación</h2>
-                </div>
-
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-                  <div>
-                    <label className="block text-xs font-bold text-zinc-600 mb-2">Fecha Ingreso</label>
-                    <input type="datetime-local" name="fecha_ingreso" required value={formData.fecha_ingreso} onChange={handleChange} className="w-full rounded-sm border-zinc-300 border p-3 text-sm focus:ring-1 focus:ring-black focus:border-black outline-none bg-zinc-50 focus:bg-white transition-colors" />
-                  </div>
-                  <div>
-                    <label className="block text-xs font-bold text-zinc-600 mb-2">Fecha Control</label>
-                    <input type="datetime-local" name="fecha_control" value={formData.fecha_control} onChange={handleChange} className="w-full rounded-sm border-zinc-300 border p-3 text-sm focus:ring-1 focus:ring-black focus:border-black outline-none bg-zinc-50 focus:bg-white transition-colors" />
-                  </div>
-                  <div className="md:col-span-2">
-                    <label className="block text-xs font-bold text-zinc-600 mb-2">Tiempo de Respuesta (Hrs)</label>
-                    <div className="relative">
-                      <input type="text" name="tiempo_respuesta_hrs" readOnly value={formData.tiempo_respuesta_hrs} className="w-full rounded-sm border-zinc-300 bg-zinc-100 text-black border p-3 text-sm font-mono font-semibold outline-none" placeholder="0.00" />
-                      {formData.tiempo_respuesta_hrs && <span className="absolute right-3 top-3.5 text-xs font-bold bg-black text-white px-2 py-0.5 rounded-sm">Auto</span>}
-                    </div>
-                  </div>
-                  <div>
-                    <label className="block text-xs font-bold text-zinc-600 mb-2">Novedad Tiempo</label>
-                    <select name="novedad_tiempo" value={formData.novedad_tiempo} onChange={handleChange} className="w-full rounded-sm border-zinc-300 border p-3 text-sm focus:ring-1 focus:ring-black focus:border-black outline-none bg-zinc-50 focus:bg-white transition-colors cursor-pointer">
-                      <option value="">Seleccione...</option>
-                      <option value="Ninguno">Ninguno</option>
-                      <option value="Fuera de Horario">Fuera de Horario</option>
-                      <option value="Fin de semana">Fin de semana</option>
-                    </select>
-                  </div>
-                  <div>
-                    <label className="block text-xs font-bold text-zinc-600 mb-2">Asesor Asignado</label>
-                    <select name="asesor" value={formData.asesor} onChange={handleChange} className="w-full rounded-sm border-zinc-300 border p-3 text-sm focus:ring-1 focus:ring-black focus:border-black outline-none bg-zinc-50 focus:bg-white transition-colors cursor-pointer">
-                      <option value="">Seleccionar...</option>
-                      {asesoresList.map(asesor => <option key={asesor} value={asesor}>{asesor}</option>)}
-                    </select>
-                  </div>
-                </div>
-              </div>
-
-              {/* Seguimiento y Calificación */}
-              <div className="bg-white p-7 rounded-sm shadow-sm border border-zinc-200 space-y-6">
-                <div className="flex items-center gap-3 border-b border-zinc-100 pb-4">
-                  <Star className="text-black" size={18} />
-                  <h2 className="text-sm font-bold tracking-wide text-zinc-800">Calificación y Seguimiento</h2>
-                </div>
-
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-                  <div>
-                    <label className="block text-xs font-bold text-zinc-600 mb-2">Estado</label>
-                    <select name="estado" value={formData.estado} onChange={handleChange} className="w-full rounded-sm border-zinc-300 border p-3 text-sm focus:ring-1 focus:ring-black focus:border-black outline-none bg-zinc-50 focus:bg-white transition-colors cursor-pointer">
-                      <option>Nuevo</option><option>Contactado</option><option>En Negociación</option><option>Perdido</option>
-                    </select>
-                  </div>
-                  <div>
-                    <label className="block text-xs font-bold text-zinc-600 mb-2">Calificación Lead</label>
-                    <select name="calificacion_lead" value={formData.calificacion_lead} onChange={handleChange} className="w-full rounded-sm border-zinc-300 border p-3 text-sm focus:ring-1 focus:ring-black focus:border-black outline-none bg-zinc-50 focus:bg-white transition-colors cursor-pointer">
-                      <option>Por evaluar</option><option>Frío</option><option>Tibio</option><option>Caliente</option>
-                    </select>
-                  </div>
-                  <div className="md:col-span-2">
-                    <label className="block text-xs font-bold text-zinc-600 mb-2">Razón Calificación</label>
-                    <input type="text" name="razon_calificacion" value={formData.razon_calificacion} onChange={handleChange} className="w-full rounded-sm border-zinc-300 border p-3 text-sm focus:ring-1 focus:ring-black focus:border-black outline-none bg-zinc-50 focus:bg-white transition-colors" />
-                  </div>
-                  <div className="md:col-span-2">
-                    <label className="block text-xs font-bold text-zinc-600 mb-2">Notas de Seguimiento</label>
-                    <textarea name="notas_seguimiento" rows="2" value={formData.notas_seguimiento} onChange={handleChange} className="w-full rounded-sm border-zinc-300 border p-3 text-sm focus:ring-1 focus:ring-black focus:border-black outline-none bg-zinc-50 focus:bg-white transition-colors resize-none"></textarea>
-                  </div>
-                  <div>
-                    <label className="block text-xs font-bold text-zinc-600 mb-2">Fecha Act. Nota</label>
-                    <input type="date" name="fecha_actualizacion_nota" value={formData.fecha_actualizacion_nota} onChange={handleChange} className="w-full rounded-sm border-zinc-300 border p-3 text-sm focus:ring-1 focus:ring-black focus:border-black outline-none bg-zinc-50 focus:bg-white transition-colors" />
-                  </div>
-                  
-                  {/* Nueva Programación de Seguimiento por Horas */}
-                  <div className="md:col-span-2 grid grid-cols-1 sm:grid-cols-3 gap-4 border border-zinc-200 p-5 rounded-sm bg-zinc-50/50 mt-2">
-                    <div className="sm:col-span-3">
-                      <label className="block text-[10px] uppercase tracking-widest font-bold text-black border-b border-zinc-200 pb-2 mb-1 flex items-center gap-2">
-                         <Clock size={12} /> Programar Próximo Seguimiento
-                      </label>
-                    </div>
-                    <div>
-                      <label className="block text-[10px] font-bold text-zinc-500 uppercase tracking-widest mb-2">Fecha</label>
-                      <input type="date" name="fecha_seguimiento_dia" value={formData.fecha_seguimiento_dia} onChange={handleChange} className="w-full rounded-sm border-zinc-300 border p-2.5 text-sm focus:ring-1 focus:ring-black focus:border-black outline-none bg-white transition-colors" />
-                    </div>
-                    <div>
-                      <label className="block text-[10px] font-bold text-zinc-500 uppercase tracking-widest mb-2">Jornada</label>
-                      <select name="jornada_seguimiento" value={formData.jornada_seguimiento} onChange={handleChange} className="w-full rounded-sm border-zinc-300 border p-2.5 text-sm focus:ring-1 focus:ring-black focus:border-black outline-none bg-white transition-colors cursor-pointer">
-                        <option value="">Seleccione...</option>
-                        <option value="Mañana">Mañana</option>
-                        <option value="Tarde">Tarde</option>
-                        <option value="Noche">Noche</option>
-                      </select>
-                    </div>
-                    <div>
-                      <label className="block text-[10px] font-bold text-zinc-500 uppercase tracking-widest mb-2">Hora Exacta</label>
-                      <input type="time" name="hora_seguimiento" value={formData.hora_seguimiento} onChange={handleChange} className="w-full rounded-sm border-zinc-300 border p-2.5 text-sm focus:ring-1 focus:ring-black focus:border-black outline-none bg-white transition-colors" />
-                    </div>
-                  </div>
-
-                  <div className="md:col-span-2 bg-zinc-50 p-4 rounded-sm border border-zinc-200 flex flex-col sm:flex-row items-start sm:items-center gap-4 mt-2">
-                    <div className="flex items-center gap-3">
-                      <input type="checkbox" id="recordatorio" name="programar_recordatorio" checked={formData.programar_recordatorio} onChange={handleChange} className="w-4 h-4 text-black rounded-sm border-zinc-400 focus:ring-black cursor-pointer" />
-                      <label htmlFor="recordatorio" className="text-sm font-bold text-zinc-700 flex items-center gap-2 cursor-pointer">
-                        <Bell size={16} className={formData.programar_recordatorio ? "text-black" : "text-zinc-400"} /> 
-                        Programar recordatorio (1 día antes)
-                      </label>
-                    </div>
-                    {formData.programar_recordatorio && (
-                      <div className="flex items-center gap-2 sm:border-l border-zinc-300 sm:pl-4">
-                        <span className="text-xs text-zinc-500 font-bold">Vía:</span>
-                        <select name="canal_recordatorio" value={formData.canal_recordatorio} onChange={handleChange} className="text-sm rounded-sm border-zinc-300 p-1.5 focus:ring-1 focus:ring-black outline-none bg-white font-bold text-black cursor-pointer">
-                          <option value="email">Correo</option><option value="teams">Teams</option>
-                        </select>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              </div>
-
-              {/* Cierre */}
-              <div className="bg-white p-7 rounded-sm shadow-sm border border-zinc-200 space-y-6">
-                <div className="flex items-center gap-3 border-b border-zinc-100 pb-4">
-                  <CheckCircle className="text-black" size={18} />
-                  <h2 className="text-sm font-bold tracking-wide text-zinc-800">Cierre y Conclusión</h2>
-                </div>
-
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-                  <div>
-                    <label className="block text-xs font-bold text-zinc-600 mb-2">Acción Requerida</label>
-                    <select name="accion" value={formData.accion} onChange={handleChange} className="w-full rounded-sm border-zinc-300 border p-3 text-sm focus:ring-1 focus:ring-black focus:border-black outline-none bg-zinc-50 focus:bg-white transition-colors cursor-pointer">
-                      <option value="">Seleccione...</option>
-                      {accionesList.map(accion => (
-                        <option key={accion} value={accion}>{accion}</option>
-                      ))}
-                    </select>
-                  </div>
-                  <div>
-                    <label className="block text-xs font-bold text-zinc-600 mb-2">Estado de la Orden</label>
-                    <select name="estado_orden" value={formData.estado_orden} onChange={handleChange} className="w-full rounded-sm border-zinc-300 border p-3 text-sm focus:ring-1 focus:ring-black focus:border-black outline-none bg-zinc-50 focus:bg-white transition-colors cursor-pointer">
-                      <option value="Abierta">Abierta</option><option value="Cerrada">Cerrada</option>
-                    </select>
-                  </div>
-                  <div>
-                    <label className="block text-xs font-bold text-zinc-600 mb-2">Fecha de Cierre</label>
-                    <input type="datetime-local" name="fecha_cierre" value={formData.fecha_cierre} onChange={handleChange} className="w-full rounded-sm border-zinc-300 border p-3 text-sm focus:ring-1 focus:ring-black focus:border-black outline-none bg-zinc-50 focus:bg-white transition-colors" />
-                  </div>
-                  <div>
-                    <label className="block text-xs font-bold text-zinc-600 mb-2">Datos Adjuntos</label>
-                    <input type="file" name="datos_adjuntos" multiple onChange={handleFileChange} className="w-full text-sm text-zinc-500 file:mr-4 file:py-2.5 file:px-4 file:rounded-sm file:border file:border-zinc-300 file:text-sm file:font-bold file:bg-zinc-50 file:text-black hover:file:bg-zinc-200 transition cursor-pointer" />
-                    {formData.datos_adjuntos && formData.datos_adjuntos.length > 0 && (
-                      <div className="mt-3 space-y-2">
-                        {formData.datos_adjuntos.map((file, index) => (
-                          <div key={index} className="flex items-center justify-between bg-zinc-50 border border-zinc-200 rounded-sm p-2.5 text-sm">
-                            <span className="truncate max-w-[150px] font-medium text-black">{file.name || 'Archivo adjunto'}</span>
-                            <button type="button" onClick={() => removeFile(index)} className="text-zinc-400 hover:text-black transition-colors"><X size={14} /></button>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                  <div className="md:col-span-2">
-                    <label className="block text-xs font-bold text-zinc-600 mb-2">Observaciones Finales</label>
-                    <textarea name="observaciones" rows="2" value={formData.observaciones} onChange={handleChange} className="w-full rounded-sm border-zinc-300 border p-3 text-sm focus:ring-1 focus:ring-black focus:border-black outline-none bg-zinc-50 focus:bg-white transition-colors resize-none"></textarea>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            <div className="flex flex-col sm:flex-row justify-end items-center gap-4 pt-4 pb-12">
-              {editingLeadId && (
-                <button type="button" onClick={handleCancelEdit} disabled={isSubmitting} className="w-full sm:w-auto bg-white border border-zinc-300 hover:bg-zinc-100 text-black px-8 py-4 rounded-sm font-bold text-sm transition-all text-center">
-                  Cancelar Edición
-                </button>
-              )}
+            <FormFields />
+            <div className="flex justify-end items-center gap-4 pt-4 pb-12">
               <button disabled={isSubmitting} type="submit" className="w-full sm:w-auto bg-black hover:bg-zinc-800 disabled:bg-zinc-400 text-white px-10 py-4 rounded-sm font-bold text-sm transition-all flex items-center justify-center gap-3">
-                {isSubmitting ? <Loader2 size={18} className="animate-spin" /> : (editingLeadId ? <Edit2 size={18}/> : <Save size={18} />)}
-                {isSubmitting ? (editingLeadId ? 'Actualizando...' : 'Guardando...') : (editingLeadId ? 'Actualizar Registro' : 'Guardar Registro')}
+                {isSubmitting ? <Loader2 size={18} className="animate-spin" /> : <Save size={18} />}
+                {isSubmitting ? 'Guardando...' : 'Guardar Registro'}
               </button>
             </div>
           </form>
@@ -984,7 +999,7 @@ export default function App() {
                   {filteredAndSortedLeads.length === 0 ? (
                     <tr>
                       <td colSpan="13" className="p-16 text-center text-zinc-500 text-sm">
-                        {isLoadingData ? 'Cargando datos desde SharePoint...' : searchTerm || filterAsesor || filterEstado || filterMes || filterFuente || filterCampania ? 'No se encontraron resultados para los filtros actuales.' : 'No hay datos registrados.'}
+                        {isLoadingData ? 'Cargando datos desde SharePoint...' : searchTerm || filterAsesor || filterEstado || filterMes || filterFuente || filterCampania ? 'No se encontraron resultados para los filtros actuales.' : 'No hay datos registrados. Haz clic en "Actualizar" para traerlos de SharePoint.'}
                       </td>
                     </tr>
                   ) : (
@@ -1032,7 +1047,7 @@ export default function App() {
                         <td className="p-4 text-center border-l border-zinc-200 bg-zinc-50 group-hover:bg-zinc-100 transition-colors">
                           <button 
                             onClick={() => handleEditLead(lead)} 
-                            className="p-2 text-zinc-500 hover:text-black hover:bg-white border border-transparent hover:border-zinc-300 hover:shadow-sm rounded-sm transition-all"
+                            className="p-2 text-zinc-500 hover:text-black hover:bg-white border border-transparent hover:border-zinc-300 hover:shadow-sm rounded-sm transition-all flex items-center justify-center gap-2 mx-auto"
                             title="Editar Registro"
                           >
                             <Edit2 size={16} />
@@ -1045,6 +1060,45 @@ export default function App() {
               </table>
             </div>
           </div>
+        )}
+
+        {/* =========================================
+            MODAL DE EDICIÓN FLOTANTE
+        ============================================= */}
+        {showEditModal && editingLeadId && (
+           <div className="fixed inset-0 bg-zinc-900/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+             <div className="bg-zinc-100 rounded-sm w-full max-w-5xl shadow-2xl flex flex-col max-h-[90vh] border border-zinc-300 animate-in zoom-in-95 duration-200">
+                {/* Header del Modal */}
+                <div className="bg-black text-white p-5 flex items-center justify-between shrink-0">
+                   <div className="flex items-center gap-3">
+                     <Edit2 size={20} className="text-zinc-300" />
+                     <div>
+                       <h3 className="text-sm font-bold uppercase tracking-wider">Modificando Registro</h3>
+                       <p className="text-xs text-zinc-400 font-mono mt-0.5">ID: {editingLeadId}</p>
+                     </div>
+                   </div>
+                   <button onClick={handleCancelEdit} className="text-zinc-400 hover:text-white transition-colors bg-white/10 hover:bg-white/20 p-2 rounded-sm"><X size={18} /></button>
+                </div>
+                
+                {/* Cuerpo del Formulario en el Modal */}
+                <div className="p-6 overflow-y-auto custom-scrollbar flex-1">
+                   <form id="editForm" onSubmit={handleSubmit} className="space-y-6">
+                      <FormFields />
+                   </form>
+                </div>
+
+                {/* Footer del Modal */}
+                <div className="bg-white border-t border-zinc-200 p-5 flex justify-end items-center gap-4 shrink-0">
+                  <button type="button" onClick={handleCancelEdit} disabled={isSubmitting} className="bg-zinc-100 hover:bg-zinc-200 text-black px-6 py-3 rounded-sm font-bold text-sm transition-colors">
+                    Cancelar
+                  </button>
+                  <button form="editForm" disabled={isSubmitting} type="submit" className="bg-black hover:bg-zinc-800 disabled:bg-zinc-400 text-white px-8 py-3 rounded-sm font-bold text-sm transition-all flex items-center justify-center gap-3 shadow-sm">
+                    {isSubmitting ? <Loader2 size={18} className="animate-spin" /> : <Save size={18} />}
+                    {isSubmitting ? 'Guardando en SharePoint...' : 'Actualizar en SharePoint'}
+                  </button>
+                </div>
+             </div>
+           </div>
         )}
 
         {/* =========================================
