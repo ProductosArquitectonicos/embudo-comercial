@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { 
   Save, Clock, User, Phone, Mail, FileText, 
   CheckCircle, Briefcase, ListPlus, 
@@ -29,8 +29,9 @@ export default function App() {
   const [savedLeads, setSavedLeads] = useState([]);
   
   // --- Estados de Alertas (Toast) ---
-  const [toastAlert, setToastAlert] = useState({ show: false, message: '', type: 'success' }); // type: 'success' | 'error'
+  const [toastAlert, setToastAlert] = useState({ show: false, message: '', type: 'success' }); // type: 'success' | 'error' | 'warning'
   const [scheduledReminder, setScheduledReminder] = useState(null);
+  const toastTimeoutRef = useRef(null); // Ref para evitar que las alertas desaparezcan antes de tiempo
   
   // Vistas y Cargas
   const [currentView, setCurrentView] = useState('form'); // 'form' | 'data' | 'reports'
@@ -50,11 +51,17 @@ export default function App() {
     });
   };
 
-  // Función auxiliar para mostrar el Toast
+  // Función robusta para mostrar el Toast (Alerta Flotante)
   const showToast = (message, type = 'success') => {
     setToastAlert({ show: true, message, type });
+    
+    // Limpiar timeout anterior si se lanza una nueva alerta rápidamente
+    if (toastTimeoutRef.current) {
+      clearTimeout(toastTimeoutRef.current);
+    }
+    
     // Autocerrar después de 5 segundos
-    setTimeout(() => {
+    toastTimeoutRef.current = setTimeout(() => {
       setToastAlert({ show: false, message: '', type: 'success' });
       setScheduledReminder(null); // Limpiar recordatorio si lo hubiera
     }, 5000);
@@ -70,14 +77,14 @@ export default function App() {
       if (e.key === 'Escape') {
         setShowAdminModal(false);
         setShowLogsModal(false);
-        if(showEditModal){
+        if(showEditModal && !isSubmitting){
           handleCancelEdit();
         }
       }
     };
     document.addEventListener('keydown', handleEscape);
     return () => document.removeEventListener('keydown', handleEscape);
-  }, [showEditModal]);
+  }, [showEditModal, isSubmitting]);
 
   // --- Estados de Filtros y Ordenamiento ---
   const [searchTerm, setSearchTerm] = useState('');
@@ -365,7 +372,6 @@ export default function App() {
           if (!response.ok) throw new Error(`HTTP Error: ${response.status}`);
           
           addLog('Registro actualizado en SharePoint exitosamente.', 'success');
-          // Disparar toast de éxito
           showToast('Registro actualizado exitosamente en SharePoint.', 'success');
           
         } else {
@@ -386,7 +392,6 @@ export default function App() {
           if (!response.ok) throw new Error(`HTTP Error: ${response.status}`);
           
           addLog('Registro guardado y enviado a SharePoint exitosamente.', 'success');
-          // Disparar toast de éxito
           showToast('Lead guardado y enviado a SharePoint exitosamente.', 'success');
           
         } else {
@@ -397,7 +402,7 @@ export default function App() {
         }
       }
 
-      // Recordatorio local (esto sigue siendo útil a nivel interfaz si lo usas)
+      // Recordatorio local
       if (formData.programar_recordatorio && formData.fecha_seguimiento_dia) {
         const timeString = formData.hora_seguimiento || '00:00';
         const fechaSeg = new Date(`${formData.fecha_seguimiento_dia}T${timeString}:00`);
@@ -417,11 +422,10 @@ export default function App() {
       }
       setEditingLeadId(null);
 
-      // Despues de enviar (nuevo o actualización), intentamos traer los datos actualizados de SharePoint
-      // Añadimos un pequeño retraso para asegurar que Power Automate haya terminado de guardar antes de consultar
+      // Despues de enviar, traemos datos actualizados de SP con un pequeño retraso
       setTimeout(() => {
         if(currentView === 'data' || currentView === 'reports'){
-            fetchLeadsData();
+            fetchLeadsData(false); // Pasamos false para no sobrescribir el toast de "Guardado con éxito"
         }
       }, 1500); 
       
@@ -434,7 +438,7 @@ export default function App() {
     }
   };
 
-  const fetchLeadsData = async () => {
+  const fetchLeadsData = async (showSuccessToast = true) => {
     if (!paConfig.urlGet) {
       addLog('Error: Intento de cargar datos sin URL GET configurada.', 'error');
       showToast("No hay una URL GET configurada para obtener datos.", 'error');
@@ -446,7 +450,7 @@ export default function App() {
     try {
       const response = await fetch(paConfig.urlGet);
       if (!response.ok) {
-         throw new Error(`HTTP Status: ${response.status} - Verifica permisos o URL.`);
+         throw new Error(`HTTP Status: ${response.status}`);
       }
 
       const textData = await response.text();
@@ -468,7 +472,9 @@ export default function App() {
           extractDynamicOptions(leads);
 
           // Solo mostramos toast de éxito si fue una carga manual
-          if(currentView === 'data') showToast('Datos sincronizados correctamente.', 'success');
+          if(currentView === 'data' && showSuccessToast) {
+            showToast('Datos sincronizados correctamente.', 'success');
+          }
       } catch(parseError) {
           console.error("Error analizando JSON:", textData);
           throw new Error("El formato devuelto por Power Automate no es un JSON válido.");
@@ -477,7 +483,7 @@ export default function App() {
     } catch (error) {
       console.error("Error al obtener datos:", error);
       addLog(`Fallo al cargar datos: ${error.message}`, 'error');
-      showToast(`Error al cargar datos: ${error.message}`, 'error');
+      showToast(`Error al cargar datos: Ver logs o verifica permisos HTTP 401.`, 'error');
     } finally {
       setIsLoadingData(false);
     }
@@ -486,7 +492,7 @@ export default function App() {
   // Cargar datos iniciales al entrar a la vista de tabla o reportes si está vacío
   useEffect(() => {
     if ((currentView === 'data' || currentView === 'reports') && paConfig.urlGet && savedLeads.length === 0) {
-      fetchLeadsData();
+      fetchLeadsData(false); // Carga inicial silenciosa
     }
   }, [currentView]);
 
@@ -949,9 +955,9 @@ export default function App() {
           </div>
         </header>
 
-        {/* ALERTA DE ÉXITO GLOBAL FLOTANTE (TOAST) */}
+        {/* ALERTA DE ÉXITO/ERROR GLOBAL FLOTANTE (TOAST) */}
         {toastAlert.show && (
-          <div className="fixed top-6 right-6 z-50 space-y-2 animate-in slide-in-from-top-2 fade-in duration-300 max-w-sm w-full">
+          <div className="fixed top-6 right-6 z-[100] space-y-2 animate-in slide-in-from-top-2 fade-in duration-300 max-w-sm w-full">
             <div className={`text-white p-4 rounded-sm border-l-4 flex items-start gap-3 shadow-2xl ${toastAlert.type === 'error' ? 'bg-red-600 border-red-800' : 'bg-black border-zinc-400'}`}>
               {toastAlert.type === 'error' ? <X size={20} className="text-red-200 shrink-0 mt-0.5" /> : <CheckCircle size={20} className="text-zinc-300 shrink-0 mt-0.5" />}
               <div className="flex-1">
@@ -964,7 +970,7 @@ export default function App() {
               </button>
             </div>
             {scheduledReminder && toastAlert.type === 'success' && (
-              <div className="bg-white text-black p-4 rounded-sm border-l-4 border-black flex items-center gap-3 shadow-xl border-y border-r border-zinc-200">
+              <div className="bg-white text-black p-4 rounded-sm border-l-4 border-black flex items-center gap-3 shadow-xl border-y border-r border-zinc-200 z-[100]">
                 <Bell size={20} className="text-zinc-500 shrink-0" />
                 <span className="text-sm">Recordatorio programado para el <strong>{scheduledReminder.fecha}</strong> vía {scheduledReminder.canal}.</span>
               </div>
@@ -1047,7 +1053,7 @@ export default function App() {
                   <option value="Cerrado">Cerrado</option>
                 </select>
                 <button 
-                  onClick={fetchLeadsData}
+                  onClick={() => fetchLeadsData(true)}
                   disabled={isLoadingData}
                   className="bg-white border border-zinc-200 hover:border-black text-black px-4 py-2.5 rounded-sm font-bold text-xs uppercase tracking-wider flex items-center gap-2 transition-all shadow-sm disabled:opacity-50"
                   title="Traer datos de SharePoint"
@@ -1168,7 +1174,7 @@ export default function App() {
             MODAL DE EDICIÓN FLOTANTE
         ============================================= */}
         {showEditModal && editingLeadId && (
-           <div className="fixed inset-0 bg-zinc-900/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+           <div className="fixed inset-0 bg-zinc-900/60 backdrop-blur-sm flex items-center justify-center z-[60] p-4">
              <div className="bg-zinc-100 rounded-sm w-full max-w-5xl shadow-2xl flex flex-col max-h-[90vh] border border-zinc-300 animate-in zoom-in-95 duration-200">
                 {/* Header del Modal */}
                 <div className="bg-black text-white p-5 flex items-center justify-between shrink-0">
@@ -1402,7 +1408,7 @@ export default function App() {
             MODAL DE LOGS (NUEVO)
         ============================================= */}
         {showLogsModal && (
-          <div className="fixed inset-0 bg-zinc-900/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="fixed inset-0 bg-zinc-900/60 backdrop-blur-sm flex items-center justify-center z-[60] p-4">
             <div className="bg-white rounded-sm w-full max-w-3xl shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200 border border-zinc-200 flex flex-col max-h-[80vh]">
                <div className="p-5 border-b border-zinc-200 bg-zinc-50 flex items-center justify-between">
                   <h3 className="text-sm font-bold text-black flex items-center gap-2 uppercase tracking-widest">
@@ -1435,7 +1441,7 @@ export default function App() {
             MODAL DE ADMINISTRACIÓN (Asesores, Líneas, Acciones & API)
         ============================================= */}
         {showAdminModal && (
-          <div className="fixed inset-0 bg-zinc-900/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="fixed inset-0 bg-zinc-900/60 backdrop-blur-sm flex items-center justify-center z-[60] p-4">
             <div className="bg-white rounded-sm w-full max-w-xl shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200 border border-zinc-200 flex flex-col max-h-[85vh]">
               
               <div className="flex border-b border-zinc-200 bg-zinc-50 relative">
