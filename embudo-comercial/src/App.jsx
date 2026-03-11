@@ -28,6 +28,7 @@ export default function App() {
   const [formData, setFormData] = useState(initialState);
   const [savedLeads, setSavedLeads] = useState([]);
   const [showSuccess, setShowSuccess] = useState(false);
+  const [successMessage, setSuccessMessage] = useState(''); // Mensaje dinámico para la alerta
   const [scheduledReminder, setScheduledReminder] = useState(null);
   
   // Vistas y Cargas
@@ -117,7 +118,7 @@ export default function App() {
 
   // Configuración de Power Automate
   const DEFAULT_POST_URL = "https://default2dad2f4230e64fe8adc416a2300053.14.environment.api.powerplatform.com:443/powerautomate/automations/direct/workflows/eb80d7bc6701476b8fcc8a81b004b87b/triggers/manual/paths/invoke?api-version=1&sp=%2Ftriggers%2Fmanual%2Frun&sv=1.0&sig=7mnm_UEBbdPHBLJzOgUDdnQM_jLP5szOIvH8yiwyNw0";
-  const DEFAULT_GET_URL = "https://default2dad2f4230e64fe8adc416a2300053.14.environment.api.powerplatform.com:443/powerautomate/automations/direct/workflows/c3760089aa194bffab0b4997b56ed1d1/triggers/manual/paths/invoke?api-version=1&sp=%2Ftriggers%2Fmanual%2Frun&sv=1.0&sig=lfGu8reb8dGM-e1OCf5oXPW_QOwDFqw8X8YZ5b6p1zM";
+  const DEFAULT_GET_URL = "https://default2dad2f4230e64fe8adc416a2300053.14.environment.api.powerplatform.com:443/powerautomate/automations/direct/workflows/c3760089aa194bffab0b4997b56ed1d1/triggers/manual/paths/invoke?api-version=1";
   
   const [paConfig, setPaConfig] = useState({
     urlPost: localStorage.getItem('pa_url_post') || DEFAULT_POST_URL,
@@ -310,6 +311,7 @@ export default function App() {
           });
           if (!response.ok) throw new Error(`HTTP Error: ${response.status}`);
           addLog('Registro actualizado en SharePoint exitosamente.', 'success');
+          setSuccessMessage('Registro actualizado exitosamente en SharePoint.');
         } else {
           addLog('No se configuró URL de actualización. No se enviaron los cambios.', 'error');
           alert("Debes configurar la URL de actualización en los ajustes.");
@@ -326,6 +328,7 @@ export default function App() {
           });
           if (!response.ok) throw new Error(`HTTP Error: ${response.status}`);
           addLog('Registro guardado y enviado a SharePoint exitosamente.', 'success');
+          setSuccessMessage('Lead guardado y enviado a SharePoint exitosamente.');
         } else {
            addLog('Error: No hay URL POST configurada.', 'error');
            alert("No has configurado la URL para enviar datos (POST).");
@@ -358,6 +361,7 @@ export default function App() {
       
       setTimeout(() => {
         setShowSuccess(false);
+        setSuccessMessage('');
         setScheduledReminder(null);
       }, 5000);
 
@@ -802,7 +806,7 @@ export default function App() {
   );
 
   return (
-    <div className="min-h-screen bg-[#F8F9FA] text-zinc-900 p-4 md:p-8 font-sans selection:bg-zinc-300">
+    <div className="min-h-screen bg-[#F8F9FA] text-zinc-900 p-4 md:p-8 font-sans selection:bg-zinc-300 relative">
       <div className="max-w-7xl mx-auto space-y-6">
         
         {/* Header y Navegación Principal */}
@@ -877,17 +881,23 @@ export default function App() {
           </div>
         </header>
 
-        {showSuccess && currentView === 'form' && (
-          <div className="space-y-2 animate-in slide-in-from-top-2">
-            <div className="bg-black text-white p-4 rounded-sm border-l-4 border-zinc-400 flex items-center gap-3 shadow-lg">
-              <CheckCircle size={20} className="text-zinc-300" />
-              <span className="text-sm font-medium">
-                Lead guardado y enviado a SharePoint exitosamente.
-              </span>
+        {/* ALERTA DE ÉXITO GLOBAL FLOTANTE (TOAST) */}
+        {showSuccess && (
+          <div className="fixed top-6 right-6 z-50 space-y-2 animate-in slide-in-from-top-2 fade-in duration-300 max-w-sm w-full">
+            <div className="bg-black text-white p-4 rounded-sm border-l-4 border-zinc-400 flex items-start gap-3 shadow-2xl">
+              <CheckCircle size={20} className="text-zinc-300 shrink-0 mt-0.5" />
+              <div className="flex-1">
+                 <span className="text-sm font-medium leading-tight block">
+                   {successMessage || 'Operación realizada exitosamente.'}
+                 </span>
+              </div>
+              <button onClick={() => setShowSuccess(false)} className="text-zinc-400 hover:text-white shrink-0">
+                <X size={16} />
+              </button>
             </div>
             {scheduledReminder && (
-              <div className="bg-white text-black p-4 rounded-sm border-l-4 border-black flex items-center gap-3 shadow-sm border-y border-r border-zinc-200">
-                <Bell size={20} className="text-zinc-500" />
+              <div className="bg-white text-black p-4 rounded-sm border-l-4 border-black flex items-center gap-3 shadow-xl border-y border-r border-zinc-200">
+                <Bell size={20} className="text-zinc-500 shrink-0" />
                 <span className="text-sm">Recordatorio programado para el <strong>{scheduledReminder.fecha}</strong> vía {scheduledReminder.canal}.</span>
               </div>
             )}
