@@ -135,7 +135,7 @@ export default function App() {
   useEffect(() => { localStorage.setItem('campaniasList', JSON.stringify(campaniasList)); }, [campaniasList]);
 
   // URLs centralizadas (2 principales) con defaults predefinidos
-  const DEFAULT_URL_DATOS = "https://default2dad2f4230e64fe8adc416a2300053.14.environment.api.powerplatform.com:443/powerautomate/automations/direct/workflows/eb80d7bc6701476b8fcc8a81b004b87b/triggers/manual/paths/invoke?api-version=1&sp=%2Ftriggers%2Fmanual%2Frun&sv=1.0&sig=7mnm_UEBbdPHBLJzOgUDdnQM_jLP5szOIvH8yiwyNw0";
+  const DEFAULT_URL_DATOS = "https://default2dad2f4230e64fe8adc416a2300053.14.environment.api.powerplatform.com:443/powerautomate/automations/direct/workflows/b4faf61d50994a6a83f7d1f28e3d8c78/triggers/manual/paths/invoke?api-version=1&sp=%2Ftriggers%2Fmanual%2Frun&sv=1.0&sig=7yYU2eVMAaTyWfdIsKdg_40bQIHfr9JWNg01200Ncz8";
   const DEFAULT_URL_CONFIG = "https://default2dad2f4230e64fe8adc416a2300053.14.environment.api.powerplatform.com:443/powerautomate/automations/direct/workflows/c3760089aa194bffab0b4997b56ed1d1/triggers/manual/paths/invoke?api-version=1&sp=%2Ftriggers%2Fmanual%2Frun&sv=1.0&sig=lfGu8reb8dGM-e1OCf5oXPW_QOwDFqw8X8YZ5b6p1zM";
 
   const [paConfig, setPaConfig] = useState({
@@ -150,7 +150,7 @@ export default function App() {
     setPaConfig({ ...paConfig, [name]: value });
   };
 
-  // --- LÓGICA DE NUBE PARA LA CONFIGURACIÓN (CSV-like Schema) ---
+  // --- LÓGICA DE NUBE PARA LA CONFIGURACIÓN (CSV-like Schema con Switch) ---
   const fetchConfigFromCloud = async () => {
     if (!paConfig.urlConfig) return;
     
@@ -158,7 +158,28 @@ export default function App() {
     addLog('Descargando configuración inicial...', 'info');
     
     try {
-      const response = await fetch(paConfig.urlConfig);
+      const payloadGet = {
+        tipo: "GET",
+        id: "", 
+        Título: "",
+        CORREOS: "",
+        LINEAS_INTERES: "",
+        ACCIONES: "",
+        FUENTES: "",
+        CAMPANIAS: "",
+        URL_DATOS: "",
+        URL_CONFIG: ""
+      };
+
+      const response = await fetch(paConfig.urlConfig, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payloadGet)
+      });
+
+      if (response.status === 202) {
+        throw new Error("Power Automate devolvió 202. Desactiva 'Respuesta asincrónica' en la configuración del bloque 'Respuesta'.");
+      }
       if (!response.ok) throw new Error(`HTTP Status: ${response.status}`);
       
       const data = await response.json();
@@ -190,54 +211,70 @@ export default function App() {
     }
   };
 
-  // Guardar todas las configuraciones y subir a SharePoint en una sola acción
-  const handleSaveConfig = async () => {
-    // 1. Guardar URLs de manera local
-    localStorage.setItem('pa_url_datos', paConfig.urlDatos);
-    localStorage.setItem('pa_url_config', paConfig.urlConfig);
+  // Función unificada para guardar los datos en la Nube (SharePoint)
+  const syncConfigToCloud = async (overrides = {}) => {
+    const targetUrlConfig = overrides.urlConfig !== undefined ? overrides.urlConfig : paConfig.urlConfig;
+    const targetUrlDatos = overrides.urlDatos !== undefined ? overrides.urlDatos : paConfig.urlDatos;
 
-    // 2. Hacer UPDATE a la lista de SharePoint usando la URL Config
-    if (!paConfig.urlConfig) {
-      showToast("Debes establecer una URL de Configuración válida.", "error");
-      return;
-    }
+    if (!targetUrlConfig) return;
 
     setIsSyncingConfig(true);
-    addLog('Guardando arquitectura y subiendo configuración a la nube...', 'info');
+    addLog('Sincronizando configuración con la Nube...', 'info');
+
+    // Usar overrides si se mandan (ej. al agregar al instante), sino usar el state actual
+    const currentAsesores = overrides.asesores || asesoresList;
+    const currentLineas = overrides.lineas || lineasList;
+    const currentAcciones = overrides.acciones || accionesList;
+    const currentFuentes = overrides.fuentes || fuentesList;
+    const currentCampanias = overrides.campanias || campaniasList;
 
     try {
       const payload = {
+        tipo: "UPDATE",
         id: "1", 
-        Título: asesoresList.map(a => a.nombre).join(';'),
-        CORREOS: asesoresList.map(a => a.correo).join(';'),
-        LINEAS_INTERES: lineasList.join(';'),
-        ACCIONES: accionesList.join(';'),
-        FUENTES: fuentesList.join(';'),
-        CAMPANIAS: campaniasList.join(';'),
-        URL_DATOS: paConfig.urlDatos,
-        URL_CONFIG: paConfig.urlConfig
+        Título: currentAsesores.map(a => a.nombre).join(';') || "",
+        CORREOS: currentAsesores.map(a => a.correo).join(';') || "",
+        LINEAS_INTERES: currentLineas.join(';') || "",
+        ACCIONES: currentAcciones.join(';') || "",
+        FUENTES: currentFuentes.join(';') || "",
+        CAMPANIAS: currentCampanias.join(';') || "",
+        URL_DATOS: targetUrlDatos || "",
+        URL_CONFIG: targetUrlConfig || ""
       };
 
-      const response = await fetch(paConfig.urlConfig, {
+      const response = await fetch(targetUrlConfig, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)
       });
 
+      if (response.status === 202) {
+        throw new Error("Power Automate devolvió 202. Desactiva 'Respuesta asincrónica' en la configuración del bloque 'Respuesta'.");
+      }
       if (!response.ok) throw new Error(`HTTP Status: ${response.status}`);
       
-      setSaveConfigSuccess(true);
-      addLog('Nuevas URLs de arquitectura y listas sincronizadas.', 'success');
-      showToast('Arquitectura guardada y sincronizada en la Nube.', 'success');
-      
-      setTimeout(() => setSaveConfigSuccess(false), 3000);
+      showToast('Nube actualizada exitosamente.', 'success');
+      addLog('Configuración sobrescrita en la nube.', 'success');
+
     } catch (error) {
       console.error(error);
-      showToast('Las URLs se guardaron, pero hubo un error al sincronizar con la Nube.', 'error');
+      showToast('Error al sincronizar con la nube.', 'error');
       addLog(`Fallo al subir config: ${error.message}`, 'error');
     } finally {
       setIsSyncingConfig(false);
     }
+  };
+
+  // Botón "Guardar Arquitectura" en pestaña Sistema
+  const handleSaveConfig = async () => {
+    localStorage.setItem('pa_url_datos', paConfig.urlDatos);
+    localStorage.setItem('pa_url_config', paConfig.urlConfig);
+    setSaveConfigSuccess(true);
+    
+    // Ejecuta la sincronización en la Nube con las nuevas URLs recién escritas
+    await syncConfigToCloud({ urlDatos: paConfig.urlDatos, urlConfig: paConfig.urlConfig });
+    
+    setTimeout(() => setSaveConfigSuccess(false), 3000);
   };
 
   // Ejecutar carga inicial solo si hay URL y listas vacías
@@ -248,69 +285,89 @@ export default function App() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []); 
 
-  // Funciones manuales para agregar/quitar de configuración
+  // --- Funciones manuales para agregar/quitar de configuración (Con Sincronización Automática) ---
   const handleAddAsesor = () => {
     const trimmedName = newAsesorName.trim();
     if (trimmedName && !asesoresList.some(a => a.nombre === trimmedName)) {
-      setAsesoresList([...asesoresList, { nombre: trimmedName, correo: newAsesorEmail.trim() }].sort((a, b) => a.nombre.localeCompare(b.nombre)));
+      const newList = [...asesoresList, { nombre: trimmedName, correo: newAsesorEmail.trim() }].sort((a, b) => a.nombre.localeCompare(b.nombre));
+      setAsesoresList(newList);
       setNewAsesorName('');
       setNewAsesorEmail('');
+      syncConfigToCloud({ asesores: newList });
     } else if (asesoresList.some(a => a.nombre === trimmedName)) {
       showToast("Ese asesor ya existe.", "warning");
     }
   };
 
   const handleRemoveAsesor = (asesorNombreToRemove) => {
-    setAsesoresList(asesoresList.filter(a => a.nombre !== asesorNombreToRemove));
+    const newList = asesoresList.filter(a => a.nombre !== asesorNombreToRemove);
+    setAsesoresList(newList);
     if (formData.asesor === asesorNombreToRemove) setFormData(prev => ({ ...prev, asesor: '' }));
+    syncConfigToCloud({ asesores: newList });
   };
 
   const handleAddLinea = () => {
     if (newLineaName.trim() && !lineasList.includes(newLineaName.trim())) {
-      setLineasList([...lineasList, newLineaName.trim()].sort((a, b) => a.localeCompare(b)));
+      const newList = [...lineasList, newLineaName.trim()].sort((a, b) => a.localeCompare(b));
+      setLineasList(newList);
       setNewLineaName('');
+      syncConfigToCloud({ lineas: newList });
     }
   };
 
   const handleRemoveLinea = (lineaToRemove) => {
-    setLineasList(lineasList.filter(l => l !== lineaToRemove));
+    const newList = lineasList.filter(l => l !== lineaToRemove);
+    setLineasList(newList);
     if (formData.linea_interes === lineaToRemove) setFormData(prev => ({ ...prev, linea_interes: '' }));
+    syncConfigToCloud({ lineas: newList });
   };
 
   const handleAddAccion = () => {
     if (newAccionName.trim() && !accionesList.includes(newAccionName.trim())) {
-      setAccionesList([...accionesList, newAccionName.trim()].sort((a, b) => a.localeCompare(b)));
+      const newList = [...accionesList, newAccionName.trim()].sort((a, b) => a.localeCompare(b));
+      setAccionesList(newList);
       setNewAccionName('');
+      syncConfigToCloud({ acciones: newList });
     }
   };
 
   const handleRemoveAccion = (accionToRemove) => {
-    setAccionesList(accionesList.filter(a => a !== accionToRemove));
+    const newList = accionesList.filter(a => a !== accionToRemove);
+    setAccionesList(newList);
     if (formData.accion === accionToRemove) setFormData(prev => ({ ...prev, accion: '' }));
+    syncConfigToCloud({ acciones: newList });
   };
 
   const handleAddFuente = () => {
     if (newFuenteName.trim() && !fuentesList.includes(newFuenteName.trim().toUpperCase())) {
-      setFuentesList([...fuentesList, newFuenteName.trim().toUpperCase()].sort((a, b) => a.localeCompare(b)));
+      const newList = [...fuentesList, newFuenteName.trim().toUpperCase()].sort((a, b) => a.localeCompare(b));
+      setFuentesList(newList);
       setNewFuenteName('');
+      syncConfigToCloud({ fuentes: newList });
     }
   };
 
   const handleRemoveFuente = (fuenteToRemove) => {
-    setFuentesList(fuentesList.filter(f => f !== fuenteToRemove));
+    const newList = fuentesList.filter(f => f !== fuenteToRemove);
+    setFuentesList(newList);
     if (formData.fuente_medio === fuenteToRemove) setFormData(prev => ({ ...prev, fuente_medio: '' }));
+    syncConfigToCloud({ fuentes: newList });
   };
 
   const handleAddCampania = () => {
     if (newCampaniaName.trim() && !campaniasList.includes(newCampaniaName.trim())) {
-      setCampaniasList([...campaniasList, newCampaniaName.trim()].sort((a, b) => a.localeCompare(b)));
+      const newList = [...campaniasList, newCampaniaName.trim()].sort((a, b) => a.localeCompare(b));
+      setCampaniasList(newList);
       setNewCampaniaName('');
+      syncConfigToCloud({ campanias: newList });
     }
   };
 
   const handleRemoveCampania = (campaniaToRemove) => {
-    setCampaniasList(campaniasList.filter(c => c !== campaniaToRemove));
+    const newList = campaniasList.filter(c => c !== campaniaToRemove);
+    setCampaniasList(newList);
     if (formData.campania === campaniaToRemove) setFormData(prev => ({ ...prev, campania: '' }));
+    syncConfigToCloud({ campanias: newList });
   };
 
   const extractDynamicOptions = (leadsData) => {
@@ -456,7 +513,7 @@ export default function App() {
         observaciones: formData.observaciones || "",
         programar_recordatorio: Boolean(formData.programar_recordatorio),
         canal_recordatorio: formData.canal_recordatorio || "",
-        datos_adjuntos: adjuntosBase64,
+        datos_adjuntos: adjuntosBase64 || [],
         fecha_registro_sistema: new Date().toISOString(),
         correo_asesor: selectedAsesorObj ? selectedAsesorObj.correo : '' 
       };
@@ -467,6 +524,9 @@ export default function App() {
         body: JSON.stringify(payload)
       });
       
+      if (response.status === 202) {
+        throw new Error("Power Automate devolvió 202. Desactiva 'Respuesta asincrónica' en la configuración del bloque 'Respuesta'.");
+      }
       if (!response.ok) throw new Error(`HTTP Error: ${response.status}`);
       
       addLog(`Registro ${isUpdate ? 'actualizado' : 'creado'} exitosamente.`, 'success');
@@ -511,12 +571,49 @@ export default function App() {
     setIsLoadingData(true);
     addLog('Ejecutando petición de consulta (tipo: GET) a URL_DATOS...', 'info');
     try {
+      // Se envía el esquema completo vacío para evitar Error 400 de schema strictness en PA
+      const payloadGet = {
+          tipo: "GET",
+          id: "",
+          titulo: "",
+          email: "",
+          fecha_ingreso: "",
+          fecha_control: "",
+          tiempo_respuesta_hrs: "",
+          novedad_tiempo: "",
+          fuente_medio: "",
+          campania: "",
+          celular: "",
+          linea_interes: "",
+          estado: "",
+          asesor: "",
+          calificacion_lead: "",
+          razon_calificacion: "",
+          notas_seguimiento: "",
+          fecha_actualizacion_nota: "",
+          fecha_seguimiento_dia: "",
+          jornada_seguimiento: "",
+          hora_seguimiento: "",
+          accion: "",
+          estado_orden: "",
+          fecha_cierre: "",
+          observaciones: "",
+          programar_recordatorio: false,
+          canal_recordatorio: "",
+          correo_asesor: "",
+          datos_adjuntos: [],
+          fecha_registro_sistema: ""
+      };
+
       const response = await fetch(paConfig.urlDatos, {
          method: 'POST', 
          headers: { 'Content-Type': 'application/json' },
-         body: JSON.stringify({ tipo: "GET" })
+         body: JSON.stringify(payloadGet)
       });
 
+      if (response.status === 202) {
+        throw new Error("Power Automate devolvió 202. Desactiva 'Respuesta asincrónica' en la configuración del bloque 'Respuesta'.");
+      }
       if (!response.ok) throw new Error(`HTTP Status: ${response.status}`);
 
       const textData = await response.text();
@@ -926,7 +1023,6 @@ export default function App() {
     <div className="min-h-screen bg-[#F8F9FA] text-zinc-900 p-4 md:p-8 font-sans selection:bg-zinc-300 relative">
       <div className="max-w-7xl mx-auto space-y-6">
         
-        {/* Header y Navegación Principal */}
         <header className="flex flex-col md:flex-row items-start md:items-center justify-between bg-white p-6 rounded-sm shadow-sm border border-zinc-200 gap-4">
           <div className="flex items-center gap-4">
             <div className="flex items-center gap-4 pr-5 border-r border-zinc-200 h-16">
@@ -997,7 +1093,6 @@ export default function App() {
           </div>
         </header>
 
-        {/* ALERTA DE ÉXITO/ERROR GLOBAL FLOTANTE (TOAST) */}
         {toastAlert.show && (
           <div className="fixed top-6 right-6 z-[100] space-y-2 animate-in slide-in-from-top-2 fade-in duration-300 max-w-sm w-full">
             <div className={`text-white p-4 rounded-sm border-l-4 flex items-start gap-3 shadow-2xl ${toastAlert.type === 'error' ? 'bg-red-600 border-red-800' : toastAlert.type === 'warning' ? 'bg-amber-500 border-amber-700' : 'bg-black border-zinc-400'}`}>
