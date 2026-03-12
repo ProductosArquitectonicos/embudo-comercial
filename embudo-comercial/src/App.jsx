@@ -161,6 +161,7 @@ export default function App() {
       const payloadGet = {
         tipo: "GET",
         id: "", 
+        Title: "",
         Título: "",
         CORREOS: "",
         LINEAS_INTERES: "",
@@ -183,13 +184,23 @@ export default function App() {
       if (!response.ok) throw new Error(`HTTP Status: ${response.status}`);
       
       const data = await response.json();
-      const configData = data.value ? (Array.isArray(data.value) ? data.value[0] : data.value) : (Array.isArray(data) ? data[0] : data);
+      
+      // Adaptación para extraer la configuración leyendo de .body o .value
+      let configData = data;
+      if (data.body) {
+        configData = typeof data.body === 'string' ? JSON.parse(data.body) : data.body;
+      } else if (data.value) {
+        configData = Array.isArray(data.value) ? data.value[0] : data.value;
+      } else if (Array.isArray(data)) {
+        configData = data[0];
+      }
 
       if (!configData) throw new Error("No se encontraron datos en la respuesta.");
 
-      const parseSemicolonString = (str) => (str ? str.split(';').map(s => s.trim()).filter(Boolean) : []);
+      const parseSemicolonString = (str) => (str ? String(str).split(';').map(s => s.trim()).filter(Boolean) : []);
 
-      const nombresAsesores = parseSemicolonString(configData.Título || configData.Titulo || configData.TITULO);
+      // Se usa Title (SharePoint default) prioritariamente
+      const nombresAsesores = parseSemicolonString(configData.Title || configData.Título || configData.Titulo || configData.TITULO);
       const correosAsesores = parseSemicolonString(configData.CORREOS);
       const extractedAsesores = nombresAsesores.map((nombre, i) => ({ 
         nombre, 
@@ -232,7 +243,8 @@ export default function App() {
       const payload = {
         tipo: "UPDATE",
         id: "1", 
-        Título: currentAsesores.map(a => a.nombre).join(';') || "",
+        Title: currentAsesores.map(a => a.nombre).join(';') || "",
+        Título: currentAsesores.map(a => a.nombre).join(';') || "", // Mantenemos por si el schema lo exige
         CORREOS: currentAsesores.map(a => a.correo).join(';') || "",
         LINEAS_INTERES: currentLineas.join(';') || "",
         ACCIONES: currentAcciones.join(';') || "",
