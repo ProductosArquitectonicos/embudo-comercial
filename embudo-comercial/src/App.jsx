@@ -11,7 +11,7 @@ import {
 export default function App() {
   // Estado inicial del formulario
   const initialState = {
-    id: '', // Se usa para la actualización
+    id: '', 
     titulo: '', fecha_ingreso: '', fecha_control: '',
     tiempo_respuesta_hrs: '', novedad_tiempo: '',
     fuente_medio: '', campania: '', celular: '', email: '',
@@ -30,16 +30,17 @@ export default function App() {
   const [savedLeads, setSavedLeads] = useState([]);
   
   // --- Estados de Alertas (Toast) ---
-  const [toastAlert, setToastAlert] = useState({ show: false, message: '', type: 'success' }); // type: 'success' | 'error' | 'warning'
+  const [toastAlert, setToastAlert] = useState({ show: false, message: '', type: 'success' }); 
   const [scheduledReminder, setScheduledReminder] = useState(null);
-  const toastTimeoutRef = useRef(null); // Ref para evitar que las alertas desaparezcan antes de tiempo
+  const toastTimeoutRef = useRef(null); 
   
   // Vistas y Cargas
-  const [currentView, setCurrentView] = useState('form'); // 'form' | 'data' | 'reports'
+  const [currentView, setCurrentView] = useState('form'); 
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isLoadingData, setIsLoadingData] = useState(false);
-  const [editingLeadId, setEditingLeadId] = useState(null); // Estado para saber si estamos editando
-  const [showEditModal, setShowEditModal] = useState(false); // Estado para mostrar el modal de edición
+  const [isSyncingConfig, setIsSyncingConfig] = useState(false); 
+  const [editingLeadId, setEditingLeadId] = useState(null); 
+  const [showEditModal, setShowEditModal] = useState(false); 
 
   // --- Logs del Sistema ---
   const [appLogs, setAppLogs] = useState([]);
@@ -48,28 +49,23 @@ export default function App() {
   const addLog = (message, type = 'info') => {
     setAppLogs(prev => {
       const newLogs = [{ time: new Date().toLocaleTimeString(), message, type }, ...prev];
-      return newLogs.slice(0, 100); // Conservar solo los últimos 100 registros
+      return newLogs.slice(0, 100); 
     });
   };
 
   // Función robusta para mostrar el Toast (Alerta Flotante)
   const showToast = (message, type = 'success') => {
     setToastAlert({ show: true, message, type });
+    if (toastTimeoutRef.current) clearTimeout(toastTimeoutRef.current);
     
-    // Limpiar timeout anterior si se lanza una nueva alerta rápidamente
-    if (toastTimeoutRef.current) {
-      clearTimeout(toastTimeoutRef.current);
-    }
-    
-    // Autocerrar después de 5 segundos
     toastTimeoutRef.current = setTimeout(() => {
       setToastAlert({ show: false, message: '', type: 'success' });
-      setScheduledReminder(null); // Limpiar recordatorio si lo hubiera
+      setScheduledReminder(null);
     }, 5000);
   };
 
   useEffect(() => {
-    addLog('Aplicación inicializada correctamente.', 'info');
+    addLog('Aplicación inicializada. Arquitectura Switch activada.', 'info');
   }, []);
 
   // --- Efecto global para cerrar modales con la tecla ESC ---
@@ -91,72 +87,62 @@ export default function App() {
   const [searchTerm, setSearchTerm] = useState('');
   const [filterAsesor, setFilterAsesor] = useState('');
   const [filterEstado, setFilterEstado] = useState('');
-  const [filterMes, setFilterMes] = useState(''); // Filtro por mes (YYYY-MM)
-  const [filterFuente, setFilterFuente] = useState(''); // Filtro por fuente
-  const [filterCampania, setFilterCampania] = useState(''); // Filtro por campaña
-  const [reportFilterCalificacion, setReportFilterCalificacion] = useState(''); // Nuevo filtro de reportes
+  const [filterMes, setFilterMes] = useState(''); 
+  const [filterFuente, setFilterFuente] = useState(''); 
+  const [filterCampania, setFilterCampania] = useState(''); 
+  const [reportFilterCalificacion, setReportFilterCalificacion] = useState(''); 
   const [sortConfig, setSortConfig] = useState({ key: 'fecha_ingreso', direction: 'descending' });
 
-  // --- Módulo de Administración y Configuración (con localStorage y Dinamismo) ---
+  // --- Módulo de Administración y Configuración (Local & Nube) ---
   const getInitialList = (key, defaultList) => {
     const savedList = localStorage.getItem(key);
     return savedList ? JSON.parse(savedList) : defaultList;
   };
 
-  const defaultAsesores = [
-    'Francisco Galeano', 'Catalina Arevalo', 'Juan Mora',
-    'David Naranjo', 'Sandra Ortiz', 'Paola Cardenas',
-    'Andrea Morales', 'Carolina Garcia', 'Ximena Tovar'
-  ];
-
-  const defaultLineas = [
-    'Iluminacion', 'Baños', 'General', 'Porcelanatos', 'Cocinas', 'Poliform'
-  ];
-
-  const defaultAcciones = [
-    'Agendar Cita', 'Cotizacion', 'Envio Catalogo', 'Venta', 'Mensaje Cierre', 'Primer Contacto'
-  ];
-
-  const defaultFuentes = [
-    'ING PAID', 'FB PAID', 'SM ORGANIC', 'GOOGLE SEARCH', 'GOOGLE ORGANIC'
-  ];
-
-  const defaultCampanias = [
-    'Hansgrohe'
-  ];
+  const getInitialAsesoresList = () => {
+    const savedList = localStorage.getItem('asesoresList');
+    if (savedList) {
+      const parsed = JSON.parse(savedList);
+      if (parsed.length > 0 && typeof parsed[0] === 'string') {
+        return parsed.map(nombre => ({ nombre, correo: '' })).sort((a, b) => a.nombre.localeCompare(b.nombre));
+      }
+      return parsed.sort((a, b) => a.nombre.localeCompare(b.nombre));
+    }
+    return [];
+  };
   
-  const [asesoresList, setAsesoresList] = useState(() => getInitialList('asesoresList', defaultAsesores).sort((a, b) => a.localeCompare(b)));
-  const [lineasList, setLineasList] = useState(() => getInitialList('lineasList', defaultLineas).sort((a, b) => a.localeCompare(b)));
-  const [accionesList, setAccionesList] = useState(() => getInitialList('accionesList', defaultAcciones).sort((a, b) => a.localeCompare(b)));
-  const [fuentesList, setFuentesList] = useState(() => getInitialList('fuentesList', defaultFuentes).sort((a, b) => a.localeCompare(b)));
-  const [campaniasList, setCampaniasList] = useState(() => getInitialList('campaniasList', defaultCampanias).sort((a, b) => a.localeCompare(b)));
+  const [asesoresList, setAsesoresList] = useState(getInitialAsesoresList);
+  const [lineasList, setLineasList] = useState(() => getInitialList('lineasList', []));
+  const [accionesList, setAccionesList] = useState(() => getInitialList('accionesList', []));
+  const [fuentesList, setFuentesList] = useState(() => getInitialList('fuentesList', []));
+  const [campaniasList, setCampaniasList] = useState(() => getInitialList('campaniasList', []));
   
   const [showAdminModal, setShowAdminModal] = useState(false);
-  const [adminTab, setAdminTab] = useState('asesores'); // 'asesores' | 'lineas' | 'acciones' | 'fuentes' | 'campanias' | 'integracion'
+  const [adminTab, setAdminTab] = useState('asesores'); 
   
   const [newAsesorName, setNewAsesorName] = useState('');
+  const [newAsesorEmail, setNewAsesorEmail] = useState('');
   const [newLineaName, setNewLineaName] = useState('');
   const [newAccionName, setNewAccionName] = useState('');
   const [newFuenteName, setNewFuenteName] = useState('');
   const [newCampaniaName, setNewCampaniaName] = useState('');
 
-  // Efectos para guardar las listas en localStorage cuando cambian
+  // Efectos para guardar las listas en localStorage
   useEffect(() => { localStorage.setItem('asesoresList', JSON.stringify(asesoresList)); }, [asesoresList]);
   useEffect(() => { localStorage.setItem('lineasList', JSON.stringify(lineasList)); }, [lineasList]);
   useEffect(() => { localStorage.setItem('accionesList', JSON.stringify(accionesList)); }, [accionesList]);
   useEffect(() => { localStorage.setItem('fuentesList', JSON.stringify(fuentesList)); }, [fuentesList]);
   useEffect(() => { localStorage.setItem('campaniasList', JSON.stringify(campaniasList)); }, [campaniasList]);
 
-  // Configuración de Power Automate
-  const DEFAULT_POST_URL = "https://default2dad2f4230e64fe8adc416a2300053.14.environment.api.powerplatform.com:443/powerautomate/automations/direct/workflows/eb80d7bc6701476b8fcc8a81b004b87b/triggers/manual/paths/invoke?api-version=1&sp=%2Ftriggers%2Fmanual%2Frun&sv=1.0&sig=7mnm_UEBbdPHBLJzOgUDdnQM_jLP5szOIvH8yiwyNw0";
-  // NUEVA URL GET ACTUALIZADA
-  const DEFAULT_GET_URL = "https://default2dad2f4230e64fe8adc416a2300053.14.environment.api.powerplatform.com:443/powerautomate/automations/direct/workflows/c3760089aa194bffab0b4997b56ed1d1/triggers/manual/paths/invoke?api-version=1&sp=%2Ftriggers%2Fmanual%2Frun&sv=1.0&sig=lfGu8reb8dGM-e1OCf5oXPW_QOwDFqw8X8YZ5b6p1zM";
-  
+  // URLs centralizadas (2 principales) con defaults predefinidos
+  const DEFAULT_URL_DATOS = "https://default2dad2f4230e64fe8adc416a2300053.14.environment.api.powerplatform.com:443/powerautomate/automations/direct/workflows/eb80d7bc6701476b8fcc8a81b004b87b/triggers/manual/paths/invoke?api-version=1&sp=%2Ftriggers%2Fmanual%2Frun&sv=1.0&sig=7mnm_UEBbdPHBLJzOgUDdnQM_jLP5szOIvH8yiwyNw0";
+  const DEFAULT_URL_CONFIG = "https://default2dad2f4230e64fe8adc416a2300053.14.environment.api.powerplatform.com:443/powerautomate/automations/direct/workflows/c3760089aa194bffab0b4997b56ed1d1/triggers/manual/paths/invoke?api-version=1&sp=%2Ftriggers%2Fmanual%2Frun&sv=1.0&sig=lfGu8reb8dGM-e1OCf5oXPW_QOwDFqw8X8YZ5b6p1zM";
+
   const [paConfig, setPaConfig] = useState({
-    urlPost: localStorage.getItem('pa_url_post') || DEFAULT_POST_URL,
-    urlGet: localStorage.getItem('pa_url_get') || DEFAULT_GET_URL,
-    urlPut: localStorage.getItem('pa_url_put') || '' // Nueva URL para actualizar
+    urlDatos: localStorage.getItem('pa_url_datos') || DEFAULT_URL_DATOS, 
+    urlConfig: localStorage.getItem('pa_url_config') || DEFAULT_URL_CONFIG 
   });
+  
   const [saveConfigSuccess, setSaveConfigSuccess] = useState(false);
 
   const handleConfigChange = (e) => {
@@ -164,35 +150,124 @@ export default function App() {
     setPaConfig({ ...paConfig, [name]: value });
   };
 
-  const handleSaveConfig = () => {
-    localStorage.setItem('pa_url_post', paConfig.urlPost);
-    localStorage.setItem('pa_url_get', paConfig.urlGet);
-    localStorage.setItem('pa_url_put', paConfig.urlPut);
-    setSaveConfigSuccess(true);
-    addLog('Configuración de URLs guardada localmente.', 'success');
-    showToast('Configuración de integración guardada.', 'success');
-    setTimeout(() => {
-      setSaveConfigSuccess(false);
-    }, 3000);
-  };
+  // --- LÓGICA DE NUBE PARA LA CONFIGURACIÓN (CSV-like Schema) ---
+  const fetchConfigFromCloud = async () => {
+    if (!paConfig.urlConfig) return;
+    
+    setIsSyncingConfig(true);
+    addLog('Descargando configuración inicial...', 'info');
+    
+    try {
+      const response = await fetch(paConfig.urlConfig);
+      if (!response.ok) throw new Error(`HTTP Status: ${response.status}`);
+      
+      const data = await response.json();
+      const configData = data.value ? (Array.isArray(data.value) ? data.value[0] : data.value) : (Array.isArray(data) ? data[0] : data);
 
-  // Funciones manuales para agregar/quitar de configuración
-  const handleAddAsesor = () => {
-    if (newAsesorName.trim() && !asesoresList.includes(newAsesorName.trim())) {
-      setAsesoresList([...asesoresList, newAsesorName.trim()].sort((a, b) => a.localeCompare(b)));
-      setNewAsesorName('');
+      if (!configData) throw new Error("No se encontraron datos en la respuesta.");
+
+      const parseSemicolonString = (str) => (str ? str.split(';').map(s => s.trim()).filter(Boolean) : []);
+
+      const nombresAsesores = parseSemicolonString(configData.Título || configData.Titulo || configData.TITULO);
+      const correosAsesores = parseSemicolonString(configData.CORREOS);
+      const extractedAsesores = nombresAsesores.map((nombre, i) => ({ 
+        nombre, 
+        correo: correosAsesores[i] || '' 
+      }));
+
+      setAsesoresList(extractedAsesores.sort((a, b) => a.nombre.localeCompare(b.nombre)));
+      setLineasList(parseSemicolonString(configData.LINEAS_INTERES).sort((a, b) => a.localeCompare(b)));
+      setAccionesList(parseSemicolonString(configData.ACCIONES).sort((a, b) => a.localeCompare(b)));
+      setFuentesList(parseSemicolonString(configData.FUENTES).sort((a, b) => a.localeCompare(b)));
+      setCampaniasList(parseSemicolonString(configData.CAMPANIAS).sort((a, b) => a.localeCompare(b)));
+
+      addLog('Configuración actualizada usando esquema separado por ;', 'success');
+    } catch (error) {
+      console.error(error);
+      addLog(`Fallo al descargar config: ${error.message}`, 'error');
+    } finally {
+      setIsSyncingConfig(false);
     }
   };
 
-  const handleRemoveAsesor = (asesorToRemove) => {
-    setAsesoresList(asesoresList.filter(a => a !== asesorToRemove));
-    if (formData.asesor === asesorToRemove) setFormData(prev => ({ ...prev, asesor: '' }));
+  // Guardar todas las configuraciones y subir a SharePoint en una sola acción
+  const handleSaveConfig = async () => {
+    // 1. Guardar URLs de manera local
+    localStorage.setItem('pa_url_datos', paConfig.urlDatos);
+    localStorage.setItem('pa_url_config', paConfig.urlConfig);
+
+    // 2. Hacer UPDATE a la lista de SharePoint usando la URL Config
+    if (!paConfig.urlConfig) {
+      showToast("Debes establecer una URL de Configuración válida.", "error");
+      return;
+    }
+
+    setIsSyncingConfig(true);
+    addLog('Guardando arquitectura y subiendo configuración a la nube...', 'info');
+
+    try {
+      const payload = {
+        id: "1", 
+        Título: asesoresList.map(a => a.nombre).join(';'),
+        CORREOS: asesoresList.map(a => a.correo).join(';'),
+        LINEAS_INTERES: lineasList.join(';'),
+        ACCIONES: accionesList.join(';'),
+        FUENTES: fuentesList.join(';'),
+        CAMPANIAS: campaniasList.join(';'),
+        URL_DATOS: paConfig.urlDatos,
+        URL_CONFIG: paConfig.urlConfig
+      };
+
+      const response = await fetch(paConfig.urlConfig, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+
+      if (!response.ok) throw new Error(`HTTP Status: ${response.status}`);
+      
+      setSaveConfigSuccess(true);
+      addLog('Nuevas URLs de arquitectura y listas sincronizadas.', 'success');
+      showToast('Arquitectura guardada y sincronizada en la Nube.', 'success');
+      
+      setTimeout(() => setSaveConfigSuccess(false), 3000);
+    } catch (error) {
+      console.error(error);
+      showToast('Las URLs se guardaron, pero hubo un error al sincronizar con la Nube.', 'error');
+      addLog(`Fallo al subir config: ${error.message}`, 'error');
+    } finally {
+      setIsSyncingConfig(false);
+    }
+  };
+
+  // Ejecutar carga inicial solo si hay URL y listas vacías
+  useEffect(() => {
+    if (paConfig.urlConfig) {
+      fetchConfigFromCloud();
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); 
+
+  // Funciones manuales para agregar/quitar de configuración
+  const handleAddAsesor = () => {
+    const trimmedName = newAsesorName.trim();
+    if (trimmedName && !asesoresList.some(a => a.nombre === trimmedName)) {
+      setAsesoresList([...asesoresList, { nombre: trimmedName, correo: newAsesorEmail.trim() }].sort((a, b) => a.nombre.localeCompare(b.nombre)));
+      setNewAsesorName('');
+      setNewAsesorEmail('');
+    } else if (asesoresList.some(a => a.nombre === trimmedName)) {
+      showToast("Ese asesor ya existe.", "warning");
+    }
+  };
+
+  const handleRemoveAsesor = (asesorNombreToRemove) => {
+    setAsesoresList(asesoresList.filter(a => a.nombre !== asesorNombreToRemove));
+    if (formData.asesor === asesorNombreToRemove) setFormData(prev => ({ ...prev, asesor: '' }));
   };
 
   const handleAddLinea = () => {
     if (newLineaName.trim() && !lineasList.includes(newLineaName.trim())) {
-      const newList = [...lineasList, newLineaName.trim()].sort((a, b) => a.localeCompare(b));
-      setLineasList(newList);
+      setLineasList([...lineasList, newLineaName.trim()].sort((a, b) => a.localeCompare(b)));
       setNewLineaName('');
     }
   };
@@ -204,8 +279,7 @@ export default function App() {
 
   const handleAddAccion = () => {
     if (newAccionName.trim() && !accionesList.includes(newAccionName.trim())) {
-      const newList = [...accionesList, newAccionName.trim()].sort((a, b) => a.localeCompare(b));
-      setAccionesList(newList);
+      setAccionesList([...accionesList, newAccionName.trim()].sort((a, b) => a.localeCompare(b)));
       setNewAccionName('');
     }
   };
@@ -217,8 +291,7 @@ export default function App() {
 
   const handleAddFuente = () => {
     if (newFuenteName.trim() && !fuentesList.includes(newFuenteName.trim().toUpperCase())) {
-      const newList = [...fuentesList, newFuenteName.trim().toUpperCase()].sort((a, b) => a.localeCompare(b));
-      setFuentesList(newList);
+      setFuentesList([...fuentesList, newFuenteName.trim().toUpperCase()].sort((a, b) => a.localeCompare(b)));
       setNewFuenteName('');
     }
   };
@@ -230,8 +303,7 @@ export default function App() {
 
   const handleAddCampania = () => {
     if (newCampaniaName.trim() && !campaniasList.includes(newCampaniaName.trim())) {
-      const newList = [...campaniasList, newCampaniaName.trim()].sort((a, b) => a.localeCompare(b));
-      setCampaniasList(newList);
+      setCampaniasList([...campaniasList, newCampaniaName.trim()].sort((a, b) => a.localeCompare(b)));
       setNewCampaniaName('');
     }
   };
@@ -241,35 +313,34 @@ export default function App() {
     if (formData.campania === campaniaToRemove) setFormData(prev => ({ ...prev, campania: '' }));
   };
 
-  // --- Lógica para extraer opciones dinámicas de los datos (GET) ---
   const extractDynamicOptions = (leadsData) => {
     if (!leadsData || leadsData.length === 0) return;
-
-    let newAsesores = new Set(asesoresList);
+    let newAsesores = [...asesoresList]; 
     let newLineas = new Set(lineasList);
     let newAcciones = new Set(accionesList);
     let newFuentes = new Set(fuentesList);
     let newCampanias = new Set(campaniasList);
 
     leadsData.forEach(lead => {
-      if (lead.asesor && lead.asesor.trim() !== '') newAsesores.add(lead.asesor.trim());
+      if (lead.asesor && lead.asesor.trim() !== '') {
+        const asesorNombre = lead.asesor.trim();
+        if (!newAsesores.some(a => a.nombre === asesorNombre)) {
+          newAsesores.push({ nombre: asesorNombre, correo: '' });
+        }
+      }
       if (lead.linea_interes && lead.linea_interes.trim() !== '') newLineas.add(lead.linea_interes.trim());
       if (lead.accion && lead.accion.trim() !== '') newAcciones.add(lead.accion.trim());
       if (lead.fuente_medio && lead.fuente_medio.trim() !== '') newFuentes.add(lead.fuente_medio.trim().toUpperCase());
       if (lead.campania && lead.campania.trim() !== '') newCampanias.add(lead.campania.trim());
     });
 
-    // Actualizamos los estados si hay cambios, y los ordenamos alfabéticamente
-    if (newAsesores.size !== asesoresList.length) setAsesoresList(Array.from(newAsesores).sort((a, b) => a.localeCompare(b)));
+    if (newAsesores.length !== asesoresList.length) setAsesoresList(newAsesores.sort((a, b) => a.nombre.localeCompare(b.nombre)));
     if (newLineas.size !== lineasList.length) setLineasList(Array.from(newLineas).sort((a, b) => a.localeCompare(b)));
     if (newAcciones.size !== accionesList.length) setAccionesList(Array.from(newAcciones).sort((a, b) => a.localeCompare(b)));
     if (newFuentes.size !== fuentesList.length) setFuentesList(Array.from(newFuentes).sort((a, b) => a.localeCompare(b)));
     if (newCampanias.size !== campaniasList.length) setCampaniasList(Array.from(newCampanias).sort((a, b) => a.localeCompare(b)));
-    
-    addLog('Listas de configuración actualizadas dinámicamente según los datos de SharePoint.', 'info');
   };
 
-  // Efecto: Cálculo de tiempo de respuesta
   useEffect(() => {
     if (formData.fecha_ingreso && formData.fecha_control) {
       const ingreso = new Date(formData.fecha_ingreso);
@@ -284,7 +355,6 @@ export default function App() {
     }
   }, [formData.fecha_ingreso, formData.fecha_control]);
 
-  // Manejadores de formulario
   const handleChange = (e) => {
     const { name, value, type, checked } = e.target;
     setFormData({ ...formData, [name]: type === 'checkbox' ? checked : value });
@@ -303,13 +373,15 @@ export default function App() {
 
   const convertFilesToBase64 = async (files) => {
     const promises = files.map(file => {
-      // Si el archivo ya es un link o ya fue procesado, se omite
       if (!file.type && file.contentBytes) return Promise.resolve(file);
       if (!file.name) return Promise.resolve(null);
-
       return new Promise((resolve) => {
         const reader = new FileReader();
-        reader.onload = (e) => resolve({ name: file.name, type: file.type, contentBytes: e.target.result.split(',')[1] });
+        reader.onload = (e) => resolve({ 
+          name: file.name, 
+          type: file.type, 
+          contentBytes: e.target.result.split(',')[1] 
+        });
         reader.readAsDataURL(file);
       });
     });
@@ -317,22 +389,15 @@ export default function App() {
     return results.filter(r => r !== null);
   };
 
-  // Cargar datos en el formulario para editar
   const handleEditLead = (lead) => {
     setEditingLeadId(lead.id);
-    // Limpiamos nulos o undefined para evitar errores en inputs controlados de React
     const safeLead = Object.keys(lead).reduce((acc, key) => {
         acc[key] = lead[key] === null ? '' : lead[key];
         return acc;
     }, {});
-
-    setFormData({
-      ...initialState, // Asegurar estructura
-      ...safeLead,
-      datos_adjuntos: lead.datos_adjuntos || [] 
-    });
+    setFormData({ ...initialState, ...safeLead });
     setShowEditModal(true);
-    addLog(`Abriendo modal de edición para registro [${lead.titulo || lead.id}].`, 'info');
+    addLog(`Abriendo modal de edición para registro ID [${lead.id}].`, 'info');
   };
 
   const handleCancelEdit = () => {
@@ -342,61 +407,71 @@ export default function App() {
     addLog('Edición cancelada.', 'warning');
   };
 
-  // Enviar / Actualizar Datos
+  // --- Enviar o Actualizar Datos de Lead (Arquitectura Switch) ---
   const handleSubmit = async (e) => {
     e.preventDefault();
+    if (!paConfig.urlDatos) {
+       showToast("Debes configurar la URL_DATOS en la pestaña Sistema.", "warning");
+       return;
+    }
+
     setIsSubmitting(true);
-    addLog(editingLeadId ? 'Procesando actualización de formulario...' : 'Procesando nuevo formulario...', 'info');
+    const isUpdate = !!editingLeadId;
+    addLog(isUpdate ? 'Enviando petición UPDATE...' : 'Enviando petición POST...', 'info');
 
     try {
-      const payload = {
-        ...formData,
-        fecha_registro_sistema: new Date().toISOString()
-      };
-
-      if (editingLeadId) {
-        // LÓGICA DE ACTUALIZACIÓN (PUT/PATCH)
-        if (paConfig.urlPut) {
-          addLog('Enviando solicitud de ACTUALIZACIÓN a Power Automate...', 'info');
-          const response = await fetch(paConfig.urlPut, {
-            method: 'POST', // Usamos POST para mayor compatibilidad con HTTP Trigger de PA
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(payload)
-          });
-          if (!response.ok) throw new Error(`HTTP Error: ${response.status}`);
-          
-          addLog('Registro actualizado en SharePoint exitosamente.', 'success');
-          showToast('Registro actualizado exitosamente en SharePoint.', 'success');
-          
-        } else {
-          addLog('No se configuró URL de actualización. No se enviaron los cambios.', 'error');
-          showToast("Debes configurar la URL de actualización en los ajustes.", 'error');
-          setIsSubmitting(false);
-          return;
-        }
-      } else {
-        // LÓGICA DE CREACIÓN (POST)
-        if (paConfig.urlPost) {
-          addLog('Enviando solicitud POST a Power Automate...', 'info');
-          const response = await fetch(paConfig.urlPost, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(payload)
-          });
-          if (!response.ok) throw new Error(`HTTP Error: ${response.status}`);
-          
-          addLog('Registro guardado y enviado a SharePoint exitosamente.', 'success');
-          showToast('Lead guardado y enviado a SharePoint exitosamente.', 'success');
-          
-        } else {
-           addLog('Error: No hay URL POST configurada.', 'error');
-           showToast("No has configurado la URL para enviar datos (POST).", 'error');
-           setIsSubmitting(false);
-           return;
-        }
+      let adjuntosBase64 = [];
+      if (formData.datos_adjuntos && formData.datos_adjuntos.length > 0) {
+        adjuntosBase64 = await convertFilesToBase64(formData.datos_adjuntos);
+        addLog(`${adjuntosBase64.length} archivo(s) listos para subir.`, 'info');
       }
 
-      // Recordatorio local (esto sigue siendo útil a nivel interfaz si lo usas)
+      const selectedAsesorObj = asesoresList.find(a => a.nombre === formData.asesor);
+      
+      const payload = {
+        tipo: isUpdate ? "UPDATE" : "POST",
+        id: isUpdate ? String(editingLeadId) : "",
+        titulo: formData.titulo || "",
+        email: formData.email || "", 
+        fecha_ingreso: formData.fecha_ingreso || "",
+        fecha_control: formData.fecha_control || "",
+        tiempo_respuesta_hrs: String(formData.tiempo_respuesta_hrs || ""),
+        novedad_tiempo: formData.novedad_tiempo || "",
+        fuente_medio: formData.fuente_medio || "",
+        campania: formData.campania || "",
+        celular: formData.celular || "",
+        linea_interes: formData.linea_interes || "",
+        estado: formData.estado || "",
+        asesor: formData.asesor || "",
+        calificacion_lead: formData.calificacion_lead || "",
+        razon_calificacion: formData.razon_calificacion || "",
+        notas_seguimiento: formData.notas_seguimiento || "",
+        fecha_actualizacion_nota: formData.fecha_actualizacion_nota || "",
+        fecha_seguimiento_dia: formData.fecha_seguimiento_dia || "",
+        jornada_seguimiento: formData.jornada_seguimiento || "",
+        hora_seguimiento: formData.hora_seguimiento || "",
+        accion: formData.accion || "",
+        estado_orden: formData.estado_orden || "",
+        fecha_cierre: formData.fecha_cierre || "",
+        observaciones: formData.observaciones || "",
+        programar_recordatorio: Boolean(formData.programar_recordatorio),
+        canal_recordatorio: formData.canal_recordatorio || "",
+        datos_adjuntos: adjuntosBase64,
+        fecha_registro_sistema: new Date().toISOString(),
+        correo_asesor: selectedAsesorObj ? selectedAsesorObj.correo : '' 
+      };
+
+      const response = await fetch(paConfig.urlDatos, {
+        method: 'POST', 
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+      
+      if (!response.ok) throw new Error(`HTTP Error: ${response.status}`);
+      
+      addLog(`Registro ${isUpdate ? 'actualizado' : 'creado'} exitosamente.`, 'success');
+      showToast(`Lead ${isUpdate ? 'actualizado' : 'guardado'} con éxito en SharePoint.`, 'success');
+
       if (formData.programar_recordatorio && formData.fecha_seguimiento_dia) {
         const timeString = formData.hora_seguimiento || '00:00';
         const fechaSeg = new Date(`${formData.fecha_seguimiento_dia}T${timeString}:00`);
@@ -406,103 +481,92 @@ export default function App() {
           fecha: fechaSeg.toLocaleString([], { dateStyle: 'short', timeStyle: 'short' }), 
           canal: formData.canal_recordatorio === 'teams' ? 'Microsoft Teams' : 'Correo Electrónico' 
         });
-        addLog(`Recordatorio programado para ${fechaSeg.toLocaleString()}`, 'info');
       }
       
-      // Limpieza de estados post-guardado exitoso
       setFormData(initialState);
-      if(editingLeadId) {
-         setShowEditModal(false);
-      }
+      if(editingLeadId) setShowEditModal(false);
       setEditingLeadId(null);
 
-      // Despues de enviar, traemos datos actualizados de SP con un pequeño retraso
       setTimeout(() => {
-        if(currentView === 'data' || currentView === 'reports'){
-            fetchLeadsData(false); // Pasamos false para no sobrescribir el toast de "Guardado con éxito"
-        }
+        if(currentView === 'data' || currentView === 'reports') fetchLeadsData(false); 
       }, 1500); 
       
     } catch (error) {
       console.error("Error al procesar:", error);
-      addLog(`Fallo al procesar datos: ${error.message}`, 'error');
-      showToast(`Hubo un error al ${editingLeadId ? 'actualizar' : 'enviar'} los datos. Revisa los logs.`, 'error');
+      addLog(`Fallo de operación: ${error.message}`, 'error');
+      showToast(`Hubo un error al ${editingLeadId ? 'actualizar' : 'enviar'} los datos. Revisa la URL_DATOS.`, 'error');
     } finally {
       setIsSubmitting(false);
     }
   };
 
+  // --- Obtener Leads (Arquitectura Switch GET) ---
   const fetchLeadsData = async (showSuccessToast = true) => {
-    if (!paConfig.urlGet) {
-      addLog('Error: Intento de cargar datos sin URL GET configurada.', 'error');
-      showToast("No hay una URL GET configurada para obtener datos.", 'error');
+    if (!paConfig.urlDatos) {
+      addLog('Error: Intento de cargar datos sin URL_DATOS configurada.', 'error');
+      showToast("Configura la URL_DATOS en Configuración > Sistema para traer los datos.", 'error');
       return;
     }
 
     setIsLoadingData(true);
-    addLog('Iniciando carga de datos desde SharePoint (GET)...', 'info');
+    addLog('Ejecutando petición de consulta (tipo: GET) a URL_DATOS...', 'info');
     try {
-      const response = await fetch(paConfig.urlGet);
-      if (!response.ok) {
-         throw new Error(`HTTP Status: ${response.status}`);
-      }
+      const response = await fetch(paConfig.urlDatos, {
+         method: 'POST', 
+         headers: { 'Content-Type': 'application/json' },
+         body: JSON.stringify({ tipo: "GET" })
+      });
+
+      if (!response.ok) throw new Error(`HTTP Status: ${response.status}`);
 
       const textData = await response.text();
-      
       if (!textData || textData.trim() === '') {
-         addLog('La respuesta del servidor está vacía.', 'warning');
+         addLog('La respuesta de leads está vacía.', 'warning');
          setSavedLeads([]);
          return;
       }
 
       try {
           const data = JSON.parse(textData);
-          // Aseguramos que maneje arreglos que vienen dentro de value o directo
           const leads = Array.isArray(data) ? data : (Array.isArray(data?.value) ? data.value : []); 
           setSavedLeads(leads);
-          addLog(`Carga exitosa: Se sincronizaron ${leads.length} registros desde SharePoint.`, 'success');
+          addLog(`Carga exitosa: ${leads.length} registros obtenidos.`, 'success');
           
-          // Extraer opciones dinámicamente de los nuevos datos
           extractDynamicOptions(leads);
 
-          // Solo mostramos toast de éxito si fue una carga manual
           if(currentView === 'data' && showSuccessToast) {
-            showToast('Datos sincronizados correctamente.', 'success');
+            showToast('Datos actualizados correctamente.', 'success');
           }
       } catch(parseError) {
-          console.error("Error analizando JSON:", textData);
-          throw new Error("El formato devuelto por Power Automate no es un JSON válido.");
+          console.error("Error analizando JSON Leads:", textData);
+          throw new Error("Power Automate no devolvió un JSON válido.");
       }
 
     } catch (error) {
-      console.error("Error al obtener datos:", error);
-      addLog(`Fallo al cargar datos: ${error.message}`, 'error');
-      showToast(`Error al cargar datos: Ver logs o verifica permisos HTTP 401.`, 'error');
+      console.error("Error obteniendo datos:", error);
+      addLog(`Fallo al cargar leads: ${error.message}`, 'error');
+      showToast(`Error al cargar datos. Verifica permisos y la URL_DATOS.`, 'error');
     } finally {
       setIsLoadingData(false);
     }
   };
 
-  // Cargar datos iniciales al entrar a la vista de tabla o reportes si está vacío
   useEffect(() => {
-    if ((currentView === 'data' || currentView === 'reports') && paConfig.urlGet && savedLeads.length === 0) {
-      fetchLeadsData(false); // Carga inicial silenciosa
+    if ((currentView === 'data' || currentView === 'reports') && paConfig.urlDatos && savedLeads.length === 0) {
+      fetchLeadsData(false); 
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentView]);
 
-  // --- Funciones para Filtrar y Ordenar ---
   const requestSort = (key) => {
     let direction = 'ascending';
-    if (sortConfig && sortConfig.key === key && sortConfig.direction === 'ascending') {
-      direction = 'descending';
-    }
+    if (sortConfig && sortConfig.key === key && sortConfig.direction === 'ascending') direction = 'descending';
     setSortConfig({ key, direction });
   };
 
   const filteredAndSortedLeads = useMemo(() => {
     let items = [...savedLeads];
 
-    // Aplicar búsqueda de texto
     if (searchTerm) {
       const lowerSearch = searchTerm.toLowerCase();
       items = items.filter(lead => 
@@ -512,29 +576,20 @@ export default function App() {
       );
     }
 
-    // Aplicar Filtro de Mes
-    if (filterMes) {
-      items = items.filter(lead => lead.fecha_ingreso && lead.fecha_ingreso.startsWith(filterMes));
-    }
-
-    // Aplicar filtros desplegables
+    if (filterMes) items = items.filter(lead => lead.fecha_ingreso && lead.fecha_ingreso.startsWith(filterMes));
     if (filterAsesor) items = items.filter(lead => lead.asesor === filterAsesor);
     if (filterEstado) items = items.filter(lead => lead.estado === filterEstado);
     if (filterFuente) items = items.filter(lead => lead.fuente_medio === filterFuente);
     if (filterCampania) items = items.filter(lead => lead.campania === filterCampania);
 
-    // Aplicar ordenamiento
     if (sortConfig !== null) {
       items.sort((a, b) => {
         let aValue = a[sortConfig.key] || '';
         let bValue = b[sortConfig.key] || '';
-
-        // Manejo especial para números (Tiempo de Respuesta)
         if (sortConfig.key === 'tiempo_respuesta_hrs') {
           aValue = parseFloat(aValue) || 0;
           bValue = parseFloat(bValue) || 0;
         }
-
         if (aValue < bValue) return sortConfig.direction === 'ascending' ? -1 : 1;
         if (aValue > bValue) return sortConfig.direction === 'ascending' ? 1 : -1;
         return 0;
@@ -544,53 +599,26 @@ export default function App() {
     return items;
   }, [savedLeads, searchTerm, filterMes, filterAsesor, filterEstado, filterFuente, filterCampania, sortConfig]);
 
-  // --- LÓGICA DE REPORTES ---
   const reportes = useMemo(() => {
-    // Filtramos la lista basándonos en el mes seleccionado antes de calcular KPIs
     let itemsForReports = savedLeads;
-    
-    // Filtrar por mes (Global compartido con la vista de Datos)
-    if (filterMes) {
-      itemsForReports = itemsForReports.filter(lead => lead.fecha_ingreso && lead.fecha_ingreso.startsWith(filterMes));
-    }
-    
-    // Filtrar por Calificación (Exclusivo de la vista de Reportes)
-    if (reportFilterCalificacion) {
-      itemsForReports = itemsForReports.filter(lead => lead.calificacion_lead === reportFilterCalificacion);
-    }
+    if (filterMes) itemsForReports = itemsForReports.filter(lead => lead.fecha_ingreso && lead.fecha_ingreso.startsWith(filterMes));
+    if (reportFilterCalificacion) itemsForReports = itemsForReports.filter(lead => lead.calificacion_lead === reportFilterCalificacion);
 
     const total = itemsForReports.length;
     if (total === 0) return null;
 
-    let potenciales = 0;
-    let calificados = 0;
-    let noCalificados = 0;
-    let ventasCerradas = 0;
-    let organicos = 0;
-    let pauta = 0;
-    let finDeSemana = 0;
-    let fueraHorario = 0;
+    let potenciales = 0, calificados = 0, noCalificados = 0, ventasCerradas = 0;
+    let organicos = 0, pauta = 0, finDeSemana = 0, fueraHorario = 0;
     const calificacionCount = {};
     const lineasCount = {};
 
     itemsForReports.forEach(lead => {
-      // Calificación y Potenciales
       const calif = lead.calificacion_lead || 'Por evaluar';
       calificacionCount[calif] = (calificacionCount[calif] || 0) + 1;
       
-      if (calif === 'Caliente' || calif === 'Tibio') {
-        potenciales++;
-        calificados++;
-      } else {
-        noCalificados++;
-      }
+      if (calif === 'Caliente' || calif === 'Tibio') { potenciales++; calificados++; } else { noCalificados++; }
+      if (lead.estado_orden === 'Cerrada' || lead.accion === 'Venta') ventasCerradas++;
 
-      // Efectividad (Ventas o Cierres)
-      if (lead.estado_orden === 'Cerrada' || lead.accion === 'Venta') {
-        ventasCerradas++;
-      }
-
-      // Fuente (Orgánico vs Pauta)
       const fuente = (lead.fuente_medio || '').toLowerCase();
       if (fuente.includes('orgánico') || fuente.includes('organico') || fuente.includes('seo') || fuente.includes('directo')) {
         organicos++;
@@ -598,20 +626,14 @@ export default function App() {
         pauta++;
       }
 
-      // Horarios
       if (lead.fecha_ingreso) {
         const fecha = new Date(lead.fecha_ingreso);
         const dia = fecha.getDay(); 
         const hora = fecha.getHours();
-        
-        if (dia === 0 || dia === 6) {
-          finDeSemana++;
-        } else if (hora < 8 || hora >= 18) {
-          fueraHorario++;
-        }
+        if (dia === 0 || dia === 6) finDeSemana++;
+        else if (hora < 8 || hora >= 18) fueraHorario++;
       }
 
-      // Líneas de interés
       const linea = lead.linea_interes || 'No especificada';
       lineasCount[linea] = (lineasCount[linea] || 0) + 1;
     });
@@ -624,11 +646,8 @@ export default function App() {
     };
   }, [savedLeads, filterMes, reportFilterCalificacion]);
 
-  // --- Función para Descargar CSV de Métricas ---
   const handleDownloadCSV = () => {
     if (!reportes) return;
-
-    // Crear contenido CSV
     const csvRows = [];
     csvRows.push(['Metrica', 'Valor']);
     csvRows.push(['Total Leads', reportes.total]);
@@ -661,10 +680,8 @@ export default function App() {
     document.body.removeChild(link);
   };
 
-  // Componente de Formulario (Reutilizado para Nuevo y Edición en Modal)
   const FormFields = () => (
     <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 p-1">
-      {/* Información General */}
       <div className="bg-white p-7 rounded-sm shadow-sm border border-zinc-200 space-y-6">
         <div className="flex items-center gap-3 border-b border-zinc-100 pb-4">
           <User className="text-black" size={18} />
@@ -684,7 +701,7 @@ export default function App() {
             </div>
           </div>
           <div>
-            <label className="block text-xs font-bold text-zinc-600 mb-2">Email</label>
+            <label className="block text-xs font-bold text-zinc-600 mb-2">Email del Lead</label>
             <div className="relative">
               <Mail className="absolute left-3 top-3 text-zinc-400" size={16} />
               <input type="email" name="email" value={formData.email} onChange={handleChange} className="w-full rounded-sm border-zinc-300 border p-3 pl-10 text-sm focus:ring-1 focus:ring-black focus:border-black outline-none bg-zinc-50 focus:bg-white transition-colors" placeholder="correo@ejemplo.com" />
@@ -720,7 +737,6 @@ export default function App() {
         </div>
       </div>
 
-      {/* Tiempos y Control */}
       <div className="bg-white p-7 rounded-sm shadow-sm border border-zinc-200 space-y-6">
         <div className="flex items-center gap-3 border-b border-zinc-100 pb-4">
           <Clock className="text-black" size={18} />
@@ -756,13 +772,12 @@ export default function App() {
             <label className="block text-xs font-bold text-zinc-600 mb-2">Asesor Asignado</label>
             <select name="asesor" value={formData.asesor} onChange={handleChange} className="w-full rounded-sm border-zinc-300 border p-3 text-sm focus:ring-1 focus:ring-black focus:border-black outline-none bg-zinc-50 focus:bg-white transition-colors cursor-pointer">
               <option value="">Seleccionar...</option>
-              {asesoresList.map(asesor => <option key={asesor} value={asesor}>{asesor}</option>)}
+              {asesoresList.map(asesor => <option key={asesor.nombre} value={asesor.nombre}>{asesor.nombre}</option>)}
             </select>
           </div>
         </div>
       </div>
 
-      {/* Seguimiento y Calificación */}
       <div className="bg-white p-7 rounded-sm shadow-sm border border-zinc-200 space-y-6">
         <div className="flex items-center gap-3 border-b border-zinc-100 pb-4">
           <Star className="text-black" size={18} />
@@ -795,7 +810,6 @@ export default function App() {
             <input type="date" name="fecha_actualizacion_nota" value={formData.fecha_actualizacion_nota} onChange={handleChange} className="w-full rounded-sm border-zinc-300 border p-3 text-sm focus:ring-1 focus:ring-black focus:border-black outline-none bg-zinc-50 focus:bg-white transition-colors" />
           </div>
           
-          {/* Nueva Programación de Seguimiento por Horas */}
           <div className="md:col-span-2 grid grid-cols-1 sm:grid-cols-3 gap-4 border border-zinc-200 p-5 rounded-sm bg-zinc-50/50 mt-2">
             <div className="sm:col-span-3">
               <label className="block text-[10px] uppercase tracking-widest font-bold text-black border-b border-zinc-200 pb-2 mb-1 flex items-center gap-2">
@@ -841,7 +855,6 @@ export default function App() {
         </div>
       </div>
 
-      {/* Cierre e Información de Adjuntos */}
       <div className="bg-white p-7 rounded-sm shadow-sm border border-zinc-200 space-y-6">
         <div className="flex items-center gap-3 border-b border-zinc-100 pb-4">
           <CheckCircle className="text-black" size={18} />
@@ -868,12 +881,25 @@ export default function App() {
             <label className="block text-xs font-bold text-zinc-600 mb-2">Fecha de Cierre</label>
             <input type="datetime-local" name="fecha_cierre" value={formData.fecha_cierre} onChange={handleChange} className="w-full rounded-sm border-zinc-300 border p-3 text-sm focus:ring-1 focus:ring-black focus:border-black outline-none bg-zinc-50 focus:bg-white transition-colors" />
           </div>
+          <div>
+            <label className="block text-xs font-bold text-zinc-600 mb-2">Datos Adjuntos (Solo si son nuevos)</label>
+            <input type="file" name="datos_adjuntos" multiple onChange={handleFileChange} className="w-full text-sm text-zinc-500 file:mr-4 file:py-2.5 file:px-4 file:rounded-sm file:border file:border-zinc-300 file:text-sm file:font-bold file:bg-zinc-50 file:text-black hover:file:bg-zinc-200 transition cursor-pointer" />
+            {formData.datos_adjuntos && formData.datos_adjuntos.length > 0 && (
+              <div className="mt-3 space-y-2">
+                {formData.datos_adjuntos.map((file, index) => (
+                  <div key={index} className="flex items-center justify-between bg-zinc-50 border border-zinc-200 rounded-sm p-2.5 text-sm">
+                    <span className="truncate max-w-[150px] font-medium text-black">{file.name || 'Archivo adjunto'}</span>
+                    <button type="button" onClick={() => removeFile(index)} className="text-zinc-400 hover:text-black transition-colors"><X size={14} /></button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
           <div className="md:col-span-2">
             <label className="block text-xs font-bold text-zinc-600 mb-2">Observaciones Finales</label>
             <textarea name="observaciones" rows="2" value={formData.observaciones} onChange={handleChange} className="w-full rounded-sm border-zinc-300 border p-3 text-sm focus:ring-1 focus:ring-black focus:border-black outline-none bg-zinc-50 focus:bg-white transition-colors resize-none"></textarea>
           </div>
           
-          {/* Visualización de Enlace de Archivo Existente (Solo en modo edición) */}
           {editingLeadId && formData.link_adjuntos && (
              <div className="md:col-span-2 bg-blue-50 border border-blue-200 p-4 rounded-sm flex items-start gap-3 mt-2">
                 <FileText className="text-blue-500 shrink-0 mt-0.5" size={18} />
@@ -926,7 +952,6 @@ export default function App() {
           </div>
           
           <div className="flex flex-wrap items-center gap-3 w-full lg:w-auto">
-            {/* Pestañas de Navegación */}
             <div className="flex bg-zinc-100 p-1 rounded-sm w-full lg:w-auto border border-zinc-200">
               <button 
                 onClick={() => {
@@ -975,8 +1000,8 @@ export default function App() {
         {/* ALERTA DE ÉXITO/ERROR GLOBAL FLOTANTE (TOAST) */}
         {toastAlert.show && (
           <div className="fixed top-6 right-6 z-[100] space-y-2 animate-in slide-in-from-top-2 fade-in duration-300 max-w-sm w-full">
-            <div className={`text-white p-4 rounded-sm border-l-4 flex items-start gap-3 shadow-2xl ${toastAlert.type === 'error' ? 'bg-red-600 border-red-800' : 'bg-black border-zinc-400'}`}>
-              {toastAlert.type === 'error' ? <X size={20} className="text-red-200 shrink-0 mt-0.5" /> : <CheckCircle size={20} className="text-zinc-300 shrink-0 mt-0.5" />}
+            <div className={`text-white p-4 rounded-sm border-l-4 flex items-start gap-3 shadow-2xl ${toastAlert.type === 'error' ? 'bg-red-600 border-red-800' : toastAlert.type === 'warning' ? 'bg-amber-500 border-amber-700' : 'bg-black border-zinc-400'}`}>
+              {toastAlert.type === 'error' || toastAlert.type === 'warning' ? <X size={20} className="text-white/70 shrink-0 mt-0.5" /> : <CheckCircle size={20} className="text-zinc-300 shrink-0 mt-0.5" />}
               <div className="flex-1">
                  <span className="text-sm font-medium leading-tight block">
                    {toastAlert.message}
@@ -995,9 +1020,6 @@ export default function App() {
           </div>
         )}
 
-        {/* =========================================
-            VISTA 1: FORMULARIO DE REGISTRO NUEVO
-        ============================================= */}
         {currentView === 'form' && !showEditModal && (
           <form onSubmit={handleSubmit} className="space-y-6 animate-in fade-in duration-300">
             <FormFields />
@@ -1010,9 +1032,6 @@ export default function App() {
           </form>
         )}
 
-        {/* =========================================
-            VISTA 2: BASE DE DATOS (TABLA)
-        ============================================= */}
         {currentView === 'data' && (
           <div className="bg-white rounded-sm shadow-sm border border-zinc-200 overflow-hidden flex flex-col animate-in fade-in duration-300">
             <div className="p-6 border-b border-zinc-200 flex flex-col md:flex-row items-start md:items-center justify-between bg-zinc-50/50 gap-4">
@@ -1024,14 +1043,12 @@ export default function App() {
                 </div>
               </div>
               
-              {/* Barra de Filtros */}
               <div className="flex flex-wrap items-center gap-3 w-full justify-end">
                 <div className="relative flex-1 md:w-48 min-w-[150px]">
                   <Search className="absolute left-3 top-3 text-zinc-400" size={16} />
                   <input type="text" placeholder="Buscar lead, correo, cel..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)} className="w-full pl-9 p-2.5 text-xs font-medium border border-zinc-300 rounded-sm focus:border-black focus:ring-1 focus:ring-black outline-none transition-all" />
                 </div>
 
-                {/* Filtro de Mes Integrado */}
                 <div className="flex items-center gap-1 border border-zinc-300 rounded-sm bg-white px-2 focus-within:border-black focus-within:ring-1 focus-within:ring-black transition-all">
                   <input 
                     type="month" 
@@ -1059,7 +1076,7 @@ export default function App() {
 
                 <select value={filterAsesor} onChange={e => setFilterAsesor(e.target.value)} className="p-2.5 text-xs font-medium border border-zinc-300 rounded-sm focus:border-black outline-none cursor-pointer bg-white">
                   <option value="">Todos los asesores</option>
-                  {asesoresList.map(a => <option key={a} value={a}>{a}</option>)}
+                  {asesoresList.map(a => <option key={a.nombre} value={a.nombre}>{a.nombre}</option>)}
                 </select>
                 <select value={filterEstado} onChange={e => setFilterEstado(e.target.value)} className="p-2.5 text-xs font-medium border border-zinc-300 rounded-sm focus:border-black outline-none cursor-pointer bg-white">
                   <option value="">Todos los estados</option>
@@ -1194,13 +1211,9 @@ export default function App() {
           </div>
         )}
 
-        {/* =========================================
-            MODAL DE EDICIÓN FLOTANTE
-        ============================================= */}
         {showEditModal && editingLeadId && (
            <div className="fixed inset-0 bg-zinc-900/60 backdrop-blur-sm flex items-center justify-center z-[60] p-4">
              <div className="bg-zinc-100 rounded-sm w-full max-w-5xl shadow-2xl flex flex-col max-h-[90vh] border border-zinc-300 animate-in zoom-in-95 duration-200">
-                {/* Header del Modal */}
                 <div className="bg-black text-white p-5 flex items-center justify-between shrink-0">
                    <div className="flex items-center gap-3">
                      <Edit2 size={20} className="text-zinc-300" />
@@ -1212,14 +1225,12 @@ export default function App() {
                    <button onClick={handleCancelEdit} className="text-zinc-400 hover:text-white transition-colors bg-white/10 hover:bg-white/20 p-2 rounded-sm"><X size={18} /></button>
                 </div>
                 
-                {/* Cuerpo del Formulario en el Modal */}
                 <div className="p-6 overflow-y-auto custom-scrollbar flex-1">
                    <form id="editForm" onSubmit={handleSubmit} className="space-y-6">
                       <FormFields />
                    </form>
                 </div>
 
-                {/* Footer del Modal */}
                 <div className="bg-white border-t border-zinc-200 p-5 flex justify-end items-center gap-4 shrink-0">
                   <button type="button" onClick={handleCancelEdit} disabled={isSubmitting} className="bg-zinc-100 hover:bg-zinc-200 text-black px-6 py-3 rounded-sm font-bold text-sm transition-colors">
                     Cancelar
@@ -1233,19 +1244,14 @@ export default function App() {
            </div>
         )}
 
-        {/* =========================================
-            VISTA 3: REPORTES Y MÉTRICAS
-        ============================================= */}
         {currentView === 'reports' && (
           <div className="space-y-6 animate-in fade-in duration-300">
-            {/* Header de Reportes y Filtros */}
             <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-white p-5 rounded-sm shadow-sm border border-zinc-200">
                <h2 className="text-sm font-bold text-black uppercase tracking-widest flex items-center gap-2">
                  <BarChart3 size={18}/> Panel de Métricas
                </h2>
                
                <div className="flex flex-wrap items-center gap-4">
-                 {/* Botón de Descarga CSV */}
                  <button 
                    onClick={handleDownloadCSV}
                    disabled={!reportes}
@@ -1258,7 +1264,6 @@ export default function App() {
                  
                  <div className="w-px h-8 bg-zinc-200 hidden md:block"></div>
 
-                 {/* Filtro Mes (Global) */}
                  <div className="flex items-center gap-2">
                    <label className="text-xs font-bold text-zinc-500 uppercase tracking-widest hidden sm:block">Mes:</label>
                    <div className="flex items-center gap-1 border border-zinc-300 rounded-sm bg-zinc-50 px-2 focus-within:border-black focus-within:ring-1 focus-within:ring-black transition-all">
@@ -1276,7 +1281,6 @@ export default function App() {
                    </div>
                  </div>
 
-                 {/* Filtro Calificación (Solo Reportes) */}
                  <div className="flex items-center gap-2 border-l border-zinc-200 pl-4">
                     <label className="text-xs font-bold text-zinc-500 uppercase tracking-widest hidden sm:block">Calificación:</label>
                     <select
@@ -1304,7 +1308,6 @@ export default function App() {
                </div>
             ) : (
               <>
-                {/* Tarjetas Principales (KPIs) */}
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
                   <div className="bg-black text-white p-6 rounded-sm shadow-sm flex flex-col justify-between">
                     <div className="flex items-center justify-between mb-4">
@@ -1356,7 +1359,6 @@ export default function App() {
                 </div>
 
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                  {/* Desglose de Calificación */}
                   <div className="bg-white p-6 rounded-sm shadow-sm border border-zinc-200">
                     <h3 className="text-sm font-bold text-black uppercase tracking-wide mb-6 border-b border-zinc-100 pb-3">Desglose por Calificación</h3>
                     <div className="space-y-4">
@@ -1378,7 +1380,6 @@ export default function App() {
                     </div>
                   </div>
 
-                  {/* Origen del Lead */}
                   <div className="bg-white p-6 rounded-sm shadow-sm border border-zinc-200">
                     <h3 className="text-sm font-bold text-black uppercase tracking-wide mb-6 border-b border-zinc-100 pb-3">Origen de Captación</h3>
                     <div className="flex items-center justify-center gap-12 h-32">
@@ -1394,7 +1395,6 @@ export default function App() {
                     </div>
                   </div>
 
-                  {/* Horarios de Ingreso */}
                   <div className="bg-white p-6 rounded-sm shadow-sm border border-zinc-200">
                     <h3 className="text-sm font-bold text-black uppercase tracking-wide mb-6 border-b border-zinc-100 pb-3 flex items-center gap-2">
                        Tiempos de Ingreso
@@ -1415,7 +1415,6 @@ export default function App() {
                     </div>
                   </div>
 
-                  {/* Líneas de Interés */}
                   <div className="bg-white p-6 rounded-sm shadow-sm border border-zinc-200">
                     <h3 className="text-sm font-bold text-black uppercase tracking-wide mb-6 border-b border-zinc-100 pb-3">Líneas de Interés Solicitadas</h3>
                     <div className="space-y-4 max-h-48 overflow-y-auto pr-2 custom-scrollbar">
@@ -1441,9 +1440,6 @@ export default function App() {
           </div>
         )}
 
-        {/* =========================================
-            MODAL DE LOGS (NUEVO)
-        ============================================= */}
         {showLogsModal && (
           <div className="fixed inset-0 bg-zinc-900/60 backdrop-blur-sm flex items-center justify-center z-[60] p-4">
             <div className="bg-white rounded-sm w-full max-w-3xl shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200 border border-zinc-200 flex flex-col max-h-[80vh]">
@@ -1474,9 +1470,6 @@ export default function App() {
           </div>
         )}
 
-        {/* =========================================
-            MODAL DE ADMINISTRACIÓN (Asesores, Líneas, Acciones & API)
-        ============================================= */}
         {showAdminModal && (
           <div className="fixed inset-0 bg-zinc-900/60 backdrop-blur-sm flex items-center justify-center z-[60] p-4">
             <div className="bg-white rounded-sm w-full max-w-xl shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200 border border-zinc-200 flex flex-col max-h-[85vh]">
@@ -1514,14 +1507,13 @@ export default function App() {
                     Campañas
                   </button>
                   <button 
-                    onClick={() => setAdminTab('integracion')}
-                    className={`whitespace-nowrap flex-1 p-4 text-xs font-bold border-b-2 transition-colors ${adminTab === 'integracion' ? 'border-black text-black bg-white' : 'border-transparent text-zinc-400 hover:text-black'}`}
+                    onClick={() => setAdminTab('sistema')}
+                    className={`whitespace-nowrap flex-1 p-4 text-xs font-bold border-b-2 transition-colors ${adminTab === 'sistema' ? 'border-black text-black bg-white' : 'border-transparent text-zinc-400 hover:text-black'}`}
                   >
-                    Integración (SP)
+                    Sistema
                   </button>
                 </div>
                 
-                {/* Botón de Cerrar Fijo */}
                 <button 
                   onClick={() => setShowAdminModal(false)} 
                   className="p-4 text-zinc-500 hover:text-black transition-colors bg-white border-l border-zinc-200 shrink-0 z-10 drop-shadow-sm"
@@ -1532,32 +1524,40 @@ export default function App() {
               </div>
               
               <div className="p-7 overflow-y-auto flex-1 custom-scrollbar">
-                {/* TAB ASESORES */}
                 {adminTab === 'asesores' && (
                   <div className="animate-in fade-in">
-                    <div className="flex gap-3 mb-6">
-                      <input 
-                        type="text" value={newAsesorName} onChange={(e) => setNewAsesorName(e.target.value)}
-                        onKeyDown={(e) => e.key === 'Enter' && handleAddAsesor()}
-                        placeholder="Nombre del asesor..."
-                        className="flex-1 rounded-sm border-zinc-300 border p-3 text-sm focus:ring-1 focus:ring-black focus:border-black outline-none bg-zinc-50 focus:bg-white"
-                      />
-                      <button onClick={handleAddAsesor} disabled={!newAsesorName.trim()} className="bg-black hover:bg-zinc-800 disabled:bg-zinc-300 text-white px-5 py-3 rounded-sm font-bold text-sm transition-colors flex items-center gap-2">
-                        <UserPlus size={16} /> Agregar
-                      </button>
+                    <div className="flex flex-col gap-3 mb-6 bg-zinc-50 p-4 border border-zinc-200 rounded-sm">
+                      <div className="flex flex-col sm:flex-row gap-3">
+                        <input 
+                          type="text" value={newAsesorName} onChange={(e) => setNewAsesorName(e.target.value)}
+                          placeholder="Nombre del asesor..."
+                          className="flex-1 rounded-sm border-zinc-300 border p-3 text-sm focus:ring-1 focus:ring-black focus:border-black outline-none bg-white"
+                        />
+                        <input 
+                          type="email" value={newAsesorEmail} onChange={(e) => setNewAsesorEmail(e.target.value)}
+                          onKeyDown={(e) => e.key === 'Enter' && handleAddAsesor()}
+                          placeholder="Correo del asesor..."
+                          className="flex-1 rounded-sm border-zinc-300 border p-3 text-sm focus:ring-1 focus:ring-black focus:border-black outline-none bg-white"
+                        />
+                        <button onClick={handleAddAsesor} disabled={!newAsesorName.trim()} className="bg-black hover:bg-zinc-800 disabled:bg-zinc-300 text-white px-5 py-3 rounded-sm font-bold text-sm transition-colors flex items-center justify-center gap-2 sm:w-auto w-full">
+                          <UserPlus size={16} /> Agregar
+                        </button>
+                      </div>
                     </div>
                     <div className="space-y-2 pr-2">
                       {asesoresList.map(asesor => (
-                        <div key={asesor} className="flex items-center justify-between bg-white border border-zinc-200 p-3.5 rounded-sm hover:border-black transition-colors">
-                          <span className="text-sm font-bold text-black">{asesor}</span>
-                          <button onClick={() => handleRemoveAsesor(asesor)} className="text-zinc-400 hover:text-red-600 transition-colors"><Trash2 size={16} /></button>
+                        <div key={asesor.nombre} className="flex items-center justify-between bg-white border border-zinc-200 p-3.5 rounded-sm hover:border-black transition-colors">
+                          <div className="flex flex-col">
+                            <span className="text-sm font-bold text-black">{asesor.nombre}</span>
+                            {asesor.correo && <span className="text-xs text-zinc-500 font-mono mt-0.5">{asesor.correo}</span>}
+                          </div>
+                          <button onClick={() => handleRemoveAsesor(asesor.nombre)} className="text-zinc-400 hover:text-red-600 transition-colors"><Trash2 size={16} /></button>
                         </div>
                       ))}
                     </div>
                   </div>
                 )}
 
-                {/* TAB LÍNEAS DE INTERÉS */}
                 {adminTab === 'lineas' && (
                   <div className="animate-in fade-in">
                     <div className="flex gap-3 mb-6">
@@ -1582,7 +1582,6 @@ export default function App() {
                   </div>
                 )}
 
-                {/* TAB ACCIONES */}
                 {adminTab === 'acciones' && (
                   <div className="animate-in fade-in">
                     <div className="flex gap-3 mb-6">
@@ -1607,7 +1606,6 @@ export default function App() {
                   </div>
                 )}
 
-                {/* TAB FUENTES */}
                 {adminTab === 'fuentes' && (
                   <div className="animate-in fade-in">
                     <div className="flex gap-3 mb-6">
@@ -1632,7 +1630,6 @@ export default function App() {
                   </div>
                 )}
 
-                {/* TAB CAMPAÑAS */}
                 {adminTab === 'campanias' && (
                   <div className="animate-in fade-in">
                     <div className="flex gap-3 mb-6">
@@ -1657,52 +1654,49 @@ export default function App() {
                   </div>
                 )}
 
-                {/* TAB INTEGRACIÓN */}
-                {adminTab === 'integracion' && (
-                  <div className="animate-in fade-in space-y-5">
-                    <p className="text-sm text-zinc-500 leading-relaxed">
-                      Configura los Webhooks HTTP de tus flujos de Power Automate para conectar esta interfaz con tu lista de SharePoint.
-                    </p>
-                    
-                    <div>
-                      <label className="block text-xs font-bold text-black mb-2">URL POST (Crear Datos)</label>
-                      <input 
-                        type="url" name="urlPost" value={paConfig.urlPost} onChange={handleConfigChange}
-                        className="w-full rounded-sm border-zinc-300 border p-3 focus:ring-1 focus:ring-black outline-none font-mono text-xs bg-zinc-50 focus:bg-white" 
-                        placeholder="https://prod-12.powerautomate.com/..." 
-                      />
-                    </div>
+                {adminTab === 'sistema' && (
+                  <div className="animate-in fade-in space-y-8">
+                    <div className="space-y-3">
+                      <h3 className="text-xs font-black uppercase tracking-widest border-b border-zinc-200 pb-2 flex items-center gap-2">
+                         <Database size={14} /> Gestión de Datos y Configuración
+                      </h3>
+                      <p className="text-sm text-zinc-500 leading-relaxed mb-4">
+                        Al hacer clic en "Guardar Arquitectura", se guardarán las URLs y se enviará la configuración actual de las listas a SharePoint.
+                      </p>
+                      
+                      <div>
+                        <label className="block text-[10px] font-bold text-black uppercase mb-1">URL_DATOS (CRUD Leads)</label>
+                        <input 
+                          type="url" name="urlDatos" value={paConfig.urlDatos} onChange={handleConfigChange}
+                          className="w-full rounded-sm border-zinc-300 border p-3 focus:ring-1 focus:ring-black outline-none font-mono text-xs bg-zinc-50 focus:bg-white" 
+                          placeholder="Manejará el CRUD dependiendo del parámetro 'tipo'"
+                        />
+                      </div>
 
-                    <div className="pt-2">
-                      <label className="block text-xs font-bold text-black mb-2">URL GET (Obtener Datos)</label>
-                      <input 
-                        type="url" name="urlGet" value={paConfig.urlGet} onChange={handleConfigChange}
-                        className="w-full rounded-sm border-zinc-300 border p-3 focus:ring-1 focus:ring-black outline-none font-mono text-xs bg-zinc-50 focus:bg-white" 
-                        placeholder="https://prod-12.powerautomate.com/..." 
-                      />
-                    </div>
+                      <div className="pt-1">
+                        <label className="block text-[10px] font-bold text-black uppercase mb-1">URL_CONFIG (Gestionar Listas)</label>
+                        <input 
+                          type="url" name="urlConfig" value={paConfig.urlConfig} onChange={handleConfigChange}
+                          placeholder="https://prod-12.powerautomate.com/... (Lee y Escribe Listas)" 
+                          className="w-full rounded-sm border-zinc-300 border p-3 focus:ring-1 focus:ring-black outline-none font-mono text-xs bg-zinc-50 focus:bg-white mb-2" 
+                        />
+                      </div>
 
-                    <div className="pt-2">
-                      <label className="block text-xs font-bold text-black mb-2">URL ACTUALIZAR (Opcional - Modificar Datos)</label>
-                      <input 
-                        type="url" name="urlPut" value={paConfig.urlPut} onChange={handleConfigChange}
-                        className="w-full rounded-sm border-zinc-300 border p-3 focus:ring-1 focus:ring-black outline-none font-mono text-xs bg-zinc-50 focus:bg-white" 
-                        placeholder="Dejar vacío si no usas flujo de actualización" 
-                      />
-                    </div>
-
-                    <div className="flex items-center gap-4 mt-4 pt-2">
-                      <button 
-                        onClick={handleSaveConfig}
-                        className="bg-black hover:bg-zinc-800 text-white px-6 py-3 rounded-sm font-bold text-sm transition-colors flex items-center gap-2"
-                      >
-                        <Save size={16} /> Guardar URLs
-                      </button>
-                      {saveConfigSuccess && (
-                        <span className="text-sm font-bold text-emerald-600 flex items-center gap-1 animate-in fade-in">
-                          <CheckCircle size={16} /> Guardado exitosamente
-                        </span>
-                      )}
+                      <div className="flex items-center gap-4 pt-4">
+                        <button 
+                          onClick={handleSaveConfig}
+                          disabled={isSyncingConfig}
+                          className="bg-black hover:bg-zinc-800 disabled:bg-zinc-400 text-white px-8 py-3 rounded-sm font-bold text-sm transition-colors flex items-center gap-2 shadow-sm"
+                        >
+                          {isSyncingConfig ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />}
+                          {isSyncingConfig ? 'Guardando y Sincronizando...' : 'Guardar Arquitectura'}
+                        </button>
+                        {saveConfigSuccess && (
+                          <span className="text-sm font-bold text-emerald-600 flex items-center gap-1 animate-in fade-in">
+                            <CheckCircle size={16} /> ¡Sincronizado con éxito!
+                          </span>
+                        )}
+                      </div>
                     </div>
                   </div>
                 )}
