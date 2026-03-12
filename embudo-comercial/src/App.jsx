@@ -349,15 +349,8 @@ export default function App() {
     addLog(editingLeadId ? 'Procesando actualización de formulario...' : 'Procesando nuevo formulario...', 'info');
 
     try {
-      let adjuntosBase64 = [];
-      if (formData.datos_adjuntos && formData.datos_adjuntos.length > 0) {
-        adjuntosBase64 = await convertFilesToBase64(formData.datos_adjuntos);
-        addLog(`${adjuntosBase64.length} archivo(s) procesados.`, 'info');
-      }
-
       const payload = {
         ...formData,
-        datos_adjuntos: adjuntosBase64,
         fecha_registro_sistema: new Date().toISOString()
       };
 
@@ -407,7 +400,7 @@ export default function App() {
       if (formData.programar_recordatorio && formData.fecha_seguimiento_dia) {
         const timeString = formData.hora_seguimiento || '00:00';
         const fechaSeg = new Date(`${formData.fecha_seguimiento_dia}T${timeString}:00`);
-        fechaSeg.setDate(fechaSeg.getDate() - 1);
+        fechaSeg.setHours(fechaSeg.getHours() - 1);
         
         setScheduledReminder({ 
           fecha: fechaSeg.toLocaleString([], { dateStyle: 'short', timeStyle: 'short' }), 
@@ -833,7 +826,7 @@ export default function App() {
               <input type="checkbox" id="recordatorio" name="programar_recordatorio" checked={formData.programar_recordatorio} onChange={handleChange} className="w-4 h-4 text-black rounded-sm border-zinc-400 focus:ring-black cursor-pointer" />
               <label htmlFor="recordatorio" className="text-sm font-bold text-zinc-700 flex items-center gap-2 cursor-pointer">
                 <Bell size={16} className={formData.programar_recordatorio ? "text-black" : "text-zinc-400"} /> 
-                Programar recordatorio (1 día antes)
+                Programar recordatorio (1 hora antes)
               </label>
             </div>
             {formData.programar_recordatorio && (
@@ -874,20 +867,6 @@ export default function App() {
           <div>
             <label className="block text-xs font-bold text-zinc-600 mb-2">Fecha de Cierre</label>
             <input type="datetime-local" name="fecha_cierre" value={formData.fecha_cierre} onChange={handleChange} className="w-full rounded-sm border-zinc-300 border p-3 text-sm focus:ring-1 focus:ring-black focus:border-black outline-none bg-zinc-50 focus:bg-white transition-colors" />
-          </div>
-          <div>
-            <label className="block text-xs font-bold text-zinc-600 mb-2">Datos Adjuntos Nuevos</label>
-            <input type="file" name="datos_adjuntos" multiple onChange={handleFileChange} className="w-full text-sm text-zinc-500 file:mr-4 file:py-2.5 file:px-4 file:rounded-sm file:border file:border-zinc-300 file:text-sm file:font-bold file:bg-zinc-50 file:text-black hover:file:bg-zinc-200 transition cursor-pointer" />
-            {formData.datos_adjuntos && formData.datos_adjuntos.length > 0 && (
-              <div className="mt-3 space-y-2">
-                {formData.datos_adjuntos.map((file, index) => (
-                  <div key={index} className="flex items-center justify-between bg-zinc-50 border border-zinc-200 rounded-sm p-2.5 text-sm">
-                    <span className="truncate max-w-[150px] font-medium text-black">{file.name || 'Archivo adjunto'}</span>
-                    <button type="button" onClick={() => removeFile(index)} className="text-zinc-400 hover:text-black transition-colors"><X size={14} /></button>
-                  </div>
-                ))}
-              </div>
-            )}
           </div>
           <div className="md:col-span-2">
             <label className="block text-xs font-bold text-zinc-600 mb-2">Observaciones Finales</label>
