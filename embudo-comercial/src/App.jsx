@@ -185,33 +185,36 @@ export default function App() {
       
       const data = await response.json();
       
-      // Adaptación para extraer la configuración leyendo de .body o .value
+      // Adaptación para extraer la configuración leyendo de .body o .value si viene empaquetado por SP
       let configData = data;
       if (data.body) {
         configData = typeof data.body === 'string' ? JSON.parse(data.body) : data.body;
-      } else if (data.value) {
-        configData = Array.isArray(data.value) ? data.value[0] : data.value;
-      } else if (Array.isArray(data)) {
-        configData = data[0];
+      }
+      
+      if (configData.value) {
+        configData = Array.isArray(configData.value) ? configData.value[0] : configData.value;
+      } else if (Array.isArray(configData)) {
+        configData = configData[0];
       }
 
       if (!configData) throw new Error("No se encontraron datos en la respuesta.");
 
       const parseSemicolonString = (str) => (str ? String(str).split(';').map(s => s.trim()).filter(Boolean) : []);
 
-      // Se usa Title (SharePoint default) prioritariamente
-      const nombresAsesores = parseSemicolonString(configData.Title || configData.Título || configData.Titulo || configData.TITULO);
+      // Usamos el fallback completo buscando cualquier variación de Title
+      const rawNombres = configData.Title || configData.Título || configData.Titulo || configData.TITULO || "";
+      const nombresAsesores = parseSemicolonString(rawNombres);
       const correosAsesores = parseSemicolonString(configData.CORREOS);
       const extractedAsesores = nombresAsesores.map((nombre, i) => ({ 
         nombre, 
         correo: correosAsesores[i] || '' 
       }));
 
-      setAsesoresList(extractedAsesores.sort((a, b) => a.nombre.localeCompare(b.nombre)));
-      setLineasList(parseSemicolonString(configData.LINEAS_INTERES).sort((a, b) => a.localeCompare(b)));
-      setAccionesList(parseSemicolonString(configData.ACCIONES).sort((a, b) => a.localeCompare(b)));
-      setFuentesList(parseSemicolonString(configData.FUENTES).sort((a, b) => a.localeCompare(b)));
-      setCampaniasList(parseSemicolonString(configData.CAMPANIAS).sort((a, b) => a.localeCompare(b)));
+      if(extractedAsesores.length > 0) setAsesoresList(extractedAsesores.sort((a, b) => a.nombre.localeCompare(b.nombre)));
+      if(configData.LINEAS_INTERES) setLineasList(parseSemicolonString(configData.LINEAS_INTERES).sort((a, b) => a.localeCompare(b)));
+      if(configData.ACCIONES) setAccionesList(parseSemicolonString(configData.ACCIONES).sort((a, b) => a.localeCompare(b)));
+      if(configData.FUENTES) setFuentesList(parseSemicolonString(configData.FUENTES).sort((a, b) => a.localeCompare(b)));
+      if(configData.CAMPANIAS) setCampaniasList(parseSemicolonString(configData.CAMPANIAS).sort((a, b) => a.localeCompare(b)));
 
       addLog('Configuración actualizada usando esquema separado por ;', 'success');
     } catch (error) {
@@ -473,7 +476,7 @@ export default function App() {
         novedad_tiempo: formData.novedad_tiempo || "",
         fuente_medio: formData.fuente_medio || "",
         campania: formData.campania || "",
-        celular: formData.celular || "",
+        celular: String(formData.celular || ""), // Cast to string to prevent SP numeric issues
         linea_interes: formData.linea_interes || "",
         estado: formData.estado || "",
         asesor: formData.asesor || "",
@@ -530,13 +533,13 @@ export default function App() {
     } catch (error) {
       console.error("Error al procesar:", error);
       addLog(`Fallo de operación: ${error.message}`, 'error');
-      showToast(`Hubo un error al ${editingLeadId ? 'actualizar' : 'enviar'} los datos. Revisa la URL_DATOS.`, 'error');
+      showToast(`Hubo un error al ${editingLeadId ? 'actualizar' : 'enviar'} los datos. Revisa la URL_DATOS o la configuración de respuesta de PA.`, 'error');
     } finally {
       setIsSubmitting(false);
     }
   };
 
-  // --- Obtener Leads (Arquitectura Switch GET) ---
+  // --- Obtener Leads (Arquitectura Switch GET con mapeo riguroso) ---
   const fetchLeadsData = async (showSuccessToast = true) => {
     if (!paConfig.urlDatos) {
       addLog('Error: Intento de cargar datos sin URL_DATOS configurada.', 'error');
@@ -547,36 +550,15 @@ export default function App() {
     setIsLoadingData(true);
     addLog('Ejecutando petición de consulta (tipo: GET) a URL_DATOS...', 'info');
     try {
-      // Se envía el esquema completo vacío para evitar Error 400 de schema strictness en PA
       const payloadGet = {
           tipo: "GET",
-          id: "",
-          titulo: "",
-          email: "",
-          fecha_ingreso: "",
-          fecha_control: "",
-          tiempo_respuesta_hrs: "",
-          novedad_tiempo: "",
-          fuente_medio: "",
-          campania: "",
-          celular: "",
-          linea_interes: "",
-          estado: "",
-          asesor: "",
-          calificacion_lead: "",
-          razon_calificacion: "",
-          notas_seguimiento: "",
-          fecha_actualizacion_nota: "",
-          fecha_seguimiento_dia: "",
-          jornada_seguimiento: "",
-          hora_seguimiento: "",
-          accion: "",
-          estado_orden: "",
-          fecha_cierre: "",
-          observaciones: "",
-          programar_recordatorio: false,
-          canal_recordatorio: "",
-          correo_asesor: "",
+          id: "", titulo: "", email: "", fecha_ingreso: "", fecha_control: "",
+          tiempo_respuesta_hrs: "", novedad_tiempo: "", fuente_medio: "", campania: "",
+          celular: "", linea_interes: "", estado: "", asesor: "", calificacion_lead: "",
+          razon_calificacion: "", notas_seguimiento: "", fecha_actualizacion_nota: "",
+          fecha_seguimiento_dia: "", jornada_seguimiento: "", hora_seguimiento: "",
+          accion: "", estado_orden: "", fecha_cierre: "", observaciones: "",
+          programar_recordatorio: false, canal_recordatorio: "", correo_asesor: "",
           fecha_registro_sistema: ""
       };
 
@@ -600,11 +582,62 @@ export default function App() {
 
       try {
           const data = JSON.parse(textData);
-          const leads = Array.isArray(data) ? data : (Array.isArray(data?.value) ? data.value : []); 
-          setSavedLeads(leads);
-          addLog(`Carga exitosa: ${leads.length} registros obtenidos.`, 'success');
           
-          extractDynamicOptions(leads);
+          // Extracción rigurosa para evitar problemas de envoltura en Power Automate
+          let rawLeads = [];
+          if (Array.isArray(data)) {
+            rawLeads = data;
+          } else if (data.value && Array.isArray(data.value)) {
+            rawLeads = data.value;
+          } else if (data.body && typeof data.body === 'object') {
+             if (Array.isArray(data.body)) rawLeads = data.body;
+             else if (data.body.value && Array.isArray(data.body.value)) rawLeads = data.body.value;
+             else if (data.body.Title || data.body.titulo) rawLeads = [data.body]; 
+          } else if (typeof data === 'object' && (data.Title || data.titulo)) {
+             rawLeads = [data];
+          }
+
+          // Función para extraer campos de Choice/Lookup de SharePoint ej: {"Value": "Nuevo"}
+          const extractValue = (field) => {
+            if (field && typeof field === 'object' && field.Value !== undefined) return field.Value;
+            return field;
+          };
+
+          // Mapeo crudo de SP a variables seguras de FrontEnd
+          const mappedLeads = rawLeads.map(item => ({
+            id: item.ID || item.id || '',
+            titulo: item.Title || item.titulo || item.TITULO || '',
+            fecha_ingreso: item.FECHA_INGRESO || item.fecha_ingreso || '',
+            fecha_control: item.FECHA_CONTROL || item.fecha_control || '',
+            tiempo_respuesta_hrs: String(item.TIEMPO_RESPUESTA_HRS || item.tiempo_respuesta_hrs || ''),
+            novedad_tiempo: extractValue(item.NOVEDAD_TIEMPO || item.novedad_tiempo) || '',
+            fuente_medio: extractValue(item.FUENTE_MEDIO || item.fuente_medio) || '',
+            campania: extractValue(item.CAMPANIA || item.campania) || '',
+            celular: String(item.CELULAR || item.celular || ''),
+            email: item.EMAIL || item.email || '',
+            linea_interes: extractValue(item.LINEA_INTERES || item.LINEAS_INTERES || item.linea_interes) || '',
+            estado: extractValue(item.ESTADO || item.estado) || 'Nuevo',
+            asesor: extractValue(item.ASESOR || item.asesor) || '',
+            calificacion_lead: extractValue(item.CALIFICACION_LEAD || item.calificacion_lead) || 'Por evaluar',
+            razon_calificacion: item.RAZON_CALIFICACION || item.razon_calificacion || '',
+            notas_seguimiento: item.NOTAS_SEGUIMIENTO || item.notas_seguimiento || '',
+            fecha_actualizacion_nota: item.FECHA_ACTUALIZACION_NOTA || item.fecha_actualizacion_nota || '',
+            fecha_seguimiento_dia: item.FECHA_SEGUIMIENTO_DIA || item.fecha_seguimiento_dia || '',
+            jornada_seguimiento: extractValue(item.JORNADA_SEGUIMIENTO || item.jornada_seguimiento) || '',
+            hora_seguimiento: item.HORA_SEGUIMIENTO || item.hora_seguimiento || '',
+            accion: extractValue(item.ACCION || item.accion) || '',
+            estado_orden: extractValue(item.ESTADO_ORDEN || item.estado_orden) || 'Abierta',
+            fecha_cierre: item.FECHA_CIERRE || item.fecha_cierre || '',
+            observaciones: item.OBSERVACIONES || item.observaciones || '',
+            programar_recordatorio: item.PROGRAMAR_RECORDATORIO === "True" || item.PROGRAMAR_RECORDATORIO === true || item.programar_recordatorio === true,
+            canal_recordatorio: extractValue(item.CANAL_RECORDATORIO || item.canal_recordatorio) || 'email',
+            link_adjuntos: item.LINK_ADJUNTOS || item.link_adjuntos || item['{Link}'] || ''
+          }));
+
+          setSavedLeads(mappedLeads);
+          addLog(`Carga exitosa: ${mappedLeads.length} registros mapeados.`, 'success');
+          
+          extractDynamicOptions(mappedLeads);
 
           if(currentView === 'data' && showSuccessToast) {
             showToast('Datos actualizados correctamente.', 'success');
@@ -617,7 +650,7 @@ export default function App() {
     } catch (error) {
       console.error("Error obteniendo datos:", error);
       addLog(`Fallo al cargar leads: ${error.message}`, 'error');
-      showToast(`Error al cargar datos. Verifica permisos y la URL_DATOS.`, 'error');
+      showToast(`Error al cargar datos. Verifica la configuración de Power Automate.`, 'error');
     } finally {
       setIsLoadingData(false);
     }
