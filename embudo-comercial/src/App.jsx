@@ -490,7 +490,6 @@ export default function App() {
         observaciones: formData.observaciones || "",
         programar_recordatorio: Boolean(formData.programar_recordatorio),
         canal_recordatorio: formData.canal_recordatorio || "",
-        link_adjuntos: formData.link_adjuntos || "", 
         fecha_registro_sistema: new Date().toISOString(),
         correo_asesor: selectedAsesorObj ? selectedAsesorObj.correo : '' 
       };
@@ -578,7 +577,6 @@ export default function App() {
           programar_recordatorio: false,
           canal_recordatorio: "",
           correo_asesor: "",
-          link_adjuntos: "",
           fecha_registro_sistema: ""
       };
 
@@ -754,7 +752,8 @@ export default function App() {
     document.body.removeChild(link);
   };
 
-  const FormFields = () => (
+  // Convertido en función renderizadora para evitar pérdida de foco en React al re-renderizar
+  const renderFormFields = () => (
     <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 p-1">
       <div className="bg-white p-7 rounded-sm shadow-sm border border-zinc-200 space-y-6">
         <div className="flex items-center gap-3 border-b border-zinc-100 pb-4">
@@ -1087,7 +1086,7 @@ export default function App() {
 
         {currentView === 'form' && !showEditModal && (
           <form onSubmit={handleSubmit} className="space-y-6 animate-in fade-in duration-300">
-            <FormFields />
+            {renderFormFields()}
             <div className="flex justify-end items-center gap-4 pt-4 pb-12">
               <button disabled={isSubmitting} type="submit" className="w-full sm:w-auto bg-black hover:bg-zinc-800 disabled:bg-zinc-400 text-white px-10 py-4 rounded-sm font-bold text-sm transition-all flex items-center justify-center gap-3">
                 {isSubmitting ? <Loader2 size={18} className="animate-spin" /> : <Save size={18} />}
@@ -1292,7 +1291,7 @@ export default function App() {
                 
                 <div className="p-6 overflow-y-auto custom-scrollbar flex-1">
                    <form id="editForm" onSubmit={handleSubmit} className="space-y-6">
-                      <FormFields />
+                      {renderFormFields()}
                    </form>
                 </div>
 
