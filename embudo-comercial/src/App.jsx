@@ -997,7 +997,13 @@ export default function App() {
             </div>
             <div>
               <label className="block text-[10px] font-bold text-zinc-500 uppercase tracking-widest mb-2">Hora Exacta</label>
-              <input type="time" name="hora_seguimiento" value={formData.hora_seguimiento} onChange={handleChange} className="w-full rounded-sm border-zinc-300 border p-2.5 text-sm focus:ring-1 focus:ring-black focus:border-black outline-none bg-white transition-colors" />
+              <select name="hora_seguimiento" value={formData.hora_seguimiento} onChange={handleChange} className="w-full rounded-sm border-zinc-300 border p-2.5 text-sm focus:ring-1 focus:ring-black focus:border-black outline-none bg-white transition-colors cursor-pointer">
+                <option value="">Seleccione...</option>
+                {Array.from({length: 24}, (_, i) => {
+                   const hour = i.toString().padStart(2, '0') + ":00";
+                   return <option key={hour} value={hour}>{hour}</option>
+                })}
+              </select>
             </div>
           </div>
 
@@ -1575,7 +1581,7 @@ export default function App() {
                           <div key={cat} className="flex flex-col items-center justify-end w-full group h-full">
                             <span className="text-xs font-bold text-zinc-500 mb-2 opacity-0 group-hover:opacity-100 transition-opacity">{count} ({percent.toFixed(0)}%)</span>
                             <div 
-                              className={`w-full max-w-[40px] rounded-t-sm transition-all duration-500 hover:opacity-80 ${cat === 'Caliente' ? 'bg-red-500' : cat === 'Tibio' ? 'bg-orange-400' : cat === 'Frío' ? 'bg-blue-400' : 'bg-zinc-300'}`} 
+                              className={`w-full max-w-[40px] rounded-t-sm transition-all duration-500 hover:opacity-80 ${cat === 'Caliente' ? 'bg-red-500' : cat === 'Tibio' ? 'bg-orange-400' : cat === 'Frío' ? 'bg-blue-400' : 'bg-purple-500'}`} 
                               style={{ height: `${Math.max(percent, 2)}%` }}
                             ></div>
                             <span className="text-[10px] font-bold text-zinc-600 mt-2 text-center break-words w-full px-1">{cat}</span>
