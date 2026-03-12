@@ -9,7 +9,7 @@ import {
 } from 'lucide-react';
 
 export default function App() {
-  // Estado inicial del formulario
+  // Estado inicial del formulario (Sin datos_adjuntos)
   const initialState = {
     id: '', 
     titulo: '', fecha_ingreso: '', fecha_control: '',
@@ -21,7 +21,7 @@ export default function App() {
     fecha_actualizacion_nota: '', 
     fecha_seguimiento_dia: '', jornada_seguimiento: '', hora_seguimiento: '',
     accion: '', estado_orden: 'Abierta', fecha_cierre: '',
-    observaciones: '', datos_adjuntos: [],
+    observaciones: '',
     programar_recordatorio: false, canal_recordatorio: 'email',
     link_adjuntos: ''
   };
@@ -429,35 +429,6 @@ export default function App() {
     setFormData({ ...formData, [name]: type === 'checkbox' ? checked : value });
   };
 
-  const handleFileChange = (e) => {
-    const files = Array.from(e.target.files);
-    setFormData(prev => ({ ...prev, datos_adjuntos: [...(prev.datos_adjuntos || []), ...files] }));
-  };
-
-  const removeFile = (indexToRemove) => {
-    setFormData(prev => ({
-      ...prev, datos_adjuntos: prev.datos_adjuntos.filter((_, index) => index !== indexToRemove)
-    }));
-  };
-
-  const convertFilesToBase64 = async (files) => {
-    const promises = files.map(file => {
-      if (!file.type && file.contentBytes) return Promise.resolve(file);
-      if (!file.name) return Promise.resolve(null);
-      return new Promise((resolve) => {
-        const reader = new FileReader();
-        reader.onload = (e) => resolve({ 
-          name: file.name, 
-          type: file.type, 
-          contentBytes: e.target.result.split(',')[1] 
-        });
-        reader.readAsDataURL(file);
-      });
-    });
-    const results = await Promise.all(promises);
-    return results.filter(r => r !== null);
-  };
-
   const handleEditLead = (lead) => {
     setEditingLeadId(lead.id);
     const safeLead = Object.keys(lead).reduce((acc, key) => {
@@ -489,12 +460,6 @@ export default function App() {
     addLog(isUpdate ? 'Enviando petición UPDATE...' : 'Enviando petición POST...', 'info');
 
     try {
-      let adjuntosBase64 = [];
-      if (formData.datos_adjuntos && formData.datos_adjuntos.length > 0) {
-        adjuntosBase64 = await convertFilesToBase64(formData.datos_adjuntos);
-        addLog(`${adjuntosBase64.length} archivo(s) listos para subir.`, 'info');
-      }
-
       const selectedAsesorObj = asesoresList.find(a => a.nombre === formData.asesor);
       
       const payload = {
@@ -525,7 +490,6 @@ export default function App() {
         observaciones: formData.observaciones || "",
         programar_recordatorio: Boolean(formData.programar_recordatorio),
         canal_recordatorio: formData.canal_recordatorio || "",
-        datos_adjuntos: adjuntosBase64 || [],
         fecha_registro_sistema: new Date().toISOString(),
         correo_asesor: selectedAsesorObj ? selectedAsesorObj.correo : '' 
       };
@@ -613,7 +577,6 @@ export default function App() {
           programar_recordatorio: false,
           canal_recordatorio: "",
           correo_asesor: "",
-          datos_adjuntos: [],
           fecha_registro_sistema: ""
       };
 
@@ -989,20 +952,6 @@ export default function App() {
           <div>
             <label className="block text-xs font-bold text-zinc-600 mb-2">Fecha de Cierre</label>
             <input type="datetime-local" name="fecha_cierre" value={formData.fecha_cierre} onChange={handleChange} className="w-full rounded-sm border-zinc-300 border p-3 text-sm focus:ring-1 focus:ring-black focus:border-black outline-none bg-zinc-50 focus:bg-white transition-colors" />
-          </div>
-          <div>
-            <label className="block text-xs font-bold text-zinc-600 mb-2">Datos Adjuntos (Solo si son nuevos)</label>
-            <input type="file" name="datos_adjuntos" multiple onChange={handleFileChange} className="w-full text-sm text-zinc-500 file:mr-4 file:py-2.5 file:px-4 file:rounded-sm file:border file:border-zinc-300 file:text-sm file:font-bold file:bg-zinc-50 file:text-black hover:file:bg-zinc-200 transition cursor-pointer" />
-            {formData.datos_adjuntos && formData.datos_adjuntos.length > 0 && (
-              <div className="mt-3 space-y-2">
-                {formData.datos_adjuntos.map((file, index) => (
-                  <div key={index} className="flex items-center justify-between bg-zinc-50 border border-zinc-200 rounded-sm p-2.5 text-sm">
-                    <span className="truncate max-w-[150px] font-medium text-black">{file.name || 'Archivo adjunto'}</span>
-                    <button type="button" onClick={() => removeFile(index)} className="text-zinc-400 hover:text-black transition-colors"><X size={14} /></button>
-                  </div>
-                ))}
-              </div>
-            )}
           </div>
           <div className="md:col-span-2">
             <label className="block text-xs font-bold text-zinc-600 mb-2">Observaciones Finales</label>
@@ -1466,75 +1415,82 @@ export default function App() {
                 </div>
 
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                  <div className="bg-white p-6 rounded-sm shadow-sm border border-zinc-200">
+                  {/* Gráfico de Barras Vertical: Calificación */}
+                  <div className="bg-white p-6 rounded-sm shadow-sm border border-zinc-200 flex flex-col">
                     <h3 className="text-sm font-bold text-black uppercase tracking-wide mb-6 border-b border-zinc-100 pb-3">Desglose por Calificación</h3>
-                    <div className="space-y-4">
+                    <div className="flex h-48 items-end justify-around gap-4 mt-auto border-b border-zinc-100 pb-2">
                       {['Caliente', 'Tibio', 'Frío', 'Por evaluar'].map(cat => {
                         const count = reportes.calificacionCount[cat] || 0;
                         const percent = reportes.total > 0 ? (count / reportes.total) * 100 : 0;
                         return (
-                          <div key={cat}>
-                            <div className="flex justify-between text-xs font-bold mb-1">
-                              <span className="text-zinc-700">{cat}</span>
-                              <span className="text-black">{count} ({percent.toFixed(0)}%)</span>
-                            </div>
-                            <div className="w-full bg-zinc-100 h-2 rounded-sm overflow-hidden">
-                              <div className={`h-full rounded-sm ${cat === 'Caliente' ? 'bg-black' : cat === 'Tibio' ? 'bg-zinc-600' : 'bg-zinc-300'}`} style={{ width: `${percent}%` }}></div>
-                            </div>
+                          <div key={cat} className="flex flex-col items-center justify-end w-full group h-full">
+                            <span className="text-xs font-bold text-zinc-500 mb-2 opacity-0 group-hover:opacity-100 transition-opacity">{count} ({percent.toFixed(0)}%)</span>
+                            <div 
+                              className={`w-full max-w-[40px] rounded-t-sm transition-all duration-500 hover:opacity-80 ${cat === 'Caliente' ? 'bg-red-500' : cat === 'Tibio' ? 'bg-orange-400' : cat === 'Frío' ? 'bg-blue-400' : 'bg-zinc-300'}`} 
+                              style={{ height: `${Math.max(percent, 2)}%` }}
+                            ></div>
+                            <span className="text-[10px] font-bold text-zinc-600 mt-2 text-center break-words w-full px-1">{cat}</span>
                           </div>
                         )
                       })}
                     </div>
                   </div>
 
+                  {/* Origen de Captación */}
                   <div className="bg-white p-6 rounded-sm shadow-sm border border-zinc-200">
                     <h3 className="text-sm font-bold text-black uppercase tracking-wide mb-6 border-b border-zinc-100 pb-3">Origen de Captación</h3>
-                    <div className="flex items-center justify-center gap-12 h-32">
-                      <div className="text-center">
-                        <p className="text-4xl font-black text-black">{reportes.organicos}</p>
-                        <p className="text-xs font-bold text-zinc-500 uppercase mt-2 tracking-wider">Orgánico / SEO</p>
+                    <div className="flex items-center justify-center gap-12 h-48">
+                      <div className="text-center group">
+                        <div className="w-24 h-24 rounded-full border-[8px] border-emerald-500 flex items-center justify-center mx-auto mb-4 group-hover:scale-105 transition-transform">
+                          <p className="text-2xl font-black text-black">{reportes.organicos}</p>
+                        </div>
+                        <p className="text-xs font-bold text-zinc-500 uppercase tracking-wider">Orgánico / SEO</p>
                       </div>
-                      <div className="w-px h-16 bg-zinc-200"></div>
-                      <div className="text-center">
-                        <p className="text-4xl font-black text-zinc-500">{reportes.pauta}</p>
-                        <p className="text-xs font-bold text-zinc-400 uppercase mt-2 tracking-wider">Pauta / Pago</p>
+                      <div className="w-px h-24 bg-zinc-200"></div>
+                      <div className="text-center group">
+                        <div className="w-24 h-24 rounded-full border-[8px] border-indigo-500 flex items-center justify-center mx-auto mb-4 group-hover:scale-105 transition-transform">
+                          <p className="text-2xl font-black text-black">{reportes.pauta}</p>
+                        </div>
+                        <p className="text-xs font-bold text-zinc-500 uppercase tracking-wider">Pauta / Pago</p>
                       </div>
                     </div>
                   </div>
 
+                  {/* Horarios de Ingreso */}
                   <div className="bg-white p-6 rounded-sm shadow-sm border border-zinc-200">
                     <h3 className="text-sm font-bold text-black uppercase tracking-wide mb-6 border-b border-zinc-100 pb-3 flex items-center gap-2">
                        Tiempos de Ingreso
                     </h3>
-                    <div className="grid grid-cols-2 gap-4">
-                      <div className="bg-zinc-50 p-4 rounded-sm border border-zinc-200 flex flex-col items-center text-center">
-                        <Moon size={24} className="text-zinc-400 mb-2" />
-                        <p className="text-3xl font-black text-black">{reportes.fueraHorario}</p>
-                        <p className="text-[10px] uppercase font-bold text-zinc-500 tracking-wide mt-1">Fuera de Horario Laboral</p>
+                    <div className="grid grid-cols-2 gap-4 h-full">
+                      <div className="bg-zinc-50 p-4 rounded-sm border border-zinc-200 flex flex-col items-center justify-center text-center hover:border-black transition-colors">
+                        <Moon size={28} className="text-zinc-400 mb-3" />
+                        <p className="text-4xl font-black text-black">{reportes.fueraHorario}</p>
+                        <p className="text-[10px] uppercase font-bold text-zinc-500 tracking-wide mt-2">Fuera de Horario</p>
                         <p className="text-[10px] text-zinc-400 mt-1">(Antes 8am / Desp 6pm)</p>
                       </div>
-                      <div className="bg-zinc-50 p-4 rounded-sm border border-zinc-200 flex flex-col items-center text-center">
-                        <CalendarX size={24} className="text-zinc-400 mb-2" />
-                        <p className="text-3xl font-black text-black">{reportes.finDeSemana}</p>
-                        <p className="text-[10px] uppercase font-bold text-zinc-500 tracking-wide mt-1">Ingresaron en Fin de Semana</p>
+                      <div className="bg-zinc-50 p-4 rounded-sm border border-zinc-200 flex flex-col items-center justify-center text-center hover:border-black transition-colors">
+                        <CalendarX size={28} className="text-zinc-400 mb-3" />
+                        <p className="text-4xl font-black text-black">{reportes.finDeSemana}</p>
+                        <p className="text-[10px] uppercase font-bold text-zinc-500 tracking-wide mt-2">Fin de Semana</p>
                         <p className="text-[10px] text-zinc-400 mt-1">(Sábados y Domingos)</p>
                       </div>
                     </div>
                   </div>
 
+                  {/* Gráfico Barras Horizontales: Líneas de Interés */}
                   <div className="bg-white p-6 rounded-sm shadow-sm border border-zinc-200">
                     <h3 className="text-sm font-bold text-black uppercase tracking-wide mb-6 border-b border-zinc-100 pb-3">Líneas de Interés Solicitadas</h3>
-                    <div className="space-y-4 max-h-48 overflow-y-auto pr-2 custom-scrollbar">
+                    <div className="space-y-5 max-h-[220px] overflow-y-auto pr-2 custom-scrollbar">
                       {Object.entries(reportes.lineasCount).sort((a,b) => b[1] - a[1]).map(([linea, count]) => {
                         const percent = reportes.total > 0 ? (count / reportes.total) * 100 : 0;
                         return (
-                          <div key={linea}>
-                            <div className="flex justify-between text-xs font-bold mb-1">
+                          <div key={linea} className="group">
+                            <div className="flex justify-between text-xs font-bold mb-1.5">
                               <span className="text-zinc-700">{linea}</span>
-                              <span className="text-black">{count}</span>
+                              <span className="text-black">{count} <span className="text-zinc-400 text-[10px]">({percent.toFixed(0)}%)</span></span>
                             </div>
-                            <div className="w-full bg-zinc-100 h-2 rounded-sm overflow-hidden">
-                              <div className="h-full rounded-sm bg-black" style={{ width: `${percent}%` }}></div>
+                            <div className="w-full bg-zinc-100 h-3 rounded-sm overflow-hidden">
+                              <div className="h-full rounded-sm bg-black group-hover:bg-indigo-600 transition-colors" style={{ width: `${percent}%` }}></div>
                             </div>
                           </div>
                         )
