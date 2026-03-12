@@ -5,7 +5,7 @@ import {
   Star, Bell, X, Settings, Trash2, UserPlus,
   TableProperties, FilePlus2, RefreshCw, Loader2, Database,
   BarChart3, Target, TrendingUp, CalendarX, Moon, Layers, Activity,
-  Search, Filter, ChevronUp, ChevronDown, Terminal, Edit2, Megaphone, Globe, ExternalLink, Link as LinkIcon, Download
+  Search, Filter, ChevronUp, ChevronDown, Terminal, Edit2, Megaphone, Globe, ExternalLink, Link as LinkIcon, Download, CloudUpload, CloudDownload
 } from 'lucide-react';
 
 export default function App() {
@@ -42,6 +42,10 @@ export default function App() {
   const [editingLeadId, setEditingLeadId] = useState(null); 
   const [showEditModal, setShowEditModal] = useState(false); 
 
+  // --- Estados para Eliminar Registro ---
+  const [leadToDelete, setLeadToDelete] = useState(null);
+  const [isDeleting, setIsDeleting] = useState(false);
+
   // --- Logs del Sistema ---
   const [appLogs, setAppLogs] = useState([]);
   const [showLogsModal, setShowLogsModal] = useState(false);
@@ -74,14 +78,16 @@ export default function App() {
       if (e.key === 'Escape') {
         setShowAdminModal(false);
         setShowLogsModal(false);
-        if(showEditModal && !isSubmitting){
+        if (leadToDelete && !isDeleting) {
+          setLeadToDelete(null);
+        } else if (showEditModal && !isSubmitting) {
           handleCancelEdit();
         }
       }
     };
     document.addEventListener('keydown', handleEscape);
     return () => document.removeEventListener('keydown', handleEscape);
-  }, [showEditModal, isSubmitting]);
+  }, [showEditModal, isSubmitting, leadToDelete, isDeleting]);
 
   // --- Estados de Filtros y Ordenamiento ---
   const [searchTerm, setSearchTerm] = useState('');
@@ -201,7 +207,7 @@ export default function App() {
 
       const parseSemicolonString = (str) => (str ? String(str).split(';').map(s => s.trim()).filter(Boolean) : []);
 
-      // Usamos el fallback completo buscando cualquier variación de Title
+      // Se usa Title (SharePoint default) prioritariamente
       const rawNombres = configData.Title || configData.Título || configData.Titulo || configData.TITULO || "";
       const nombresAsesores = parseSemicolonString(rawNombres);
       const correosAsesores = parseSemicolonString(configData.CORREOS);
@@ -450,6 +456,57 @@ export default function App() {
     addLog('Edición cancelada.', 'warning');
   };
 
+  // --- Ejecutar Eliminación (DELETE) ---
+  const executeDelete = async () => {
+    if (!leadToDelete) return;
+    if (!paConfig.urlDatos) {
+       showToast("Debes configurar la URL_DATOS en la pestaña Sistema.", "warning");
+       return;
+    }
+
+    setIsDeleting(true);
+    addLog(`Enviando petición DELETE para registro ID [${leadToDelete.id}]...`, 'info');
+
+    try {
+      const payloadDelete = {
+        tipo: "DELETE",
+        id: String(leadToDelete.id),
+        titulo: "", email: "", fecha_ingreso: "", fecha_control: "",
+        tiempo_respuesta_hrs: "", novedad_tiempo: "", fuente_medio: "", campania: "",
+        celular: "", linea_interes: "", estado: "", asesor: "", calificacion_lead: "",
+        razon_calificacion: "", notas_seguimiento: "", fecha_actualizacion_nota: "",
+        fecha_seguimiento_dia: "", jornada_seguimiento: "", hora_seguimiento: "",
+        accion: "", estado_orden: "", fecha_cierre: "", observaciones: "",
+        programar_recordatorio: false, canal_recordatorio: "", correo_asesor: "",
+        fecha_registro_sistema: ""
+      };
+
+      const response = await fetch(paConfig.urlDatos, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payloadDelete)
+      });
+
+      if (response.status === 202) {
+        throw new Error("Power Automate devolvió 202. Desactiva 'Respuesta asincrónica' en la configuración del bloque 'Respuesta'.");
+      }
+      if (!response.ok) throw new Error(`HTTP Status: ${response.status}`);
+      
+      addLog(`Registro ID [${leadToDelete.id}] eliminado exitosamente.`, 'success');
+      showToast(`Lead eliminado con éxito de SharePoint.`, 'success');
+
+      setLeadToDelete(null);
+      fetchLeadsData(false); // Refrescar tabla silenciosamente
+      
+    } catch (error) {
+      console.error("Error al eliminar:", error);
+      addLog(`Fallo al eliminar: ${error.message}`, 'error');
+      showToast(`Error al eliminar el registro. Revisa la URL_DATOS.`, 'error');
+    } finally {
+      setIsDeleting(false);
+    }
+  };
+
   // --- Enviar o Actualizar Datos de Lead (Arquitectura Switch) ---
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -476,7 +533,7 @@ export default function App() {
         novedad_tiempo: formData.novedad_tiempo || "",
         fuente_medio: formData.fuente_medio || "",
         campania: formData.campania || "",
-        celular: String(formData.celular || ""), // Cast to string to prevent SP numeric issues
+        celular: String(formData.celular || ""), 
         linea_interes: formData.linea_interes || "",
         estado: formData.estado || "",
         asesor: formData.asesor || "",
@@ -533,7 +590,7 @@ export default function App() {
     } catch (error) {
       console.error("Error al procesar:", error);
       addLog(`Fallo de operación: ${error.message}`, 'error');
-      showToast(`Hubo un error al ${editingLeadId ? 'actualizar' : 'enviar'} los datos. Revisa la URL_DATOS o la configuración de respuesta de PA.`, 'error');
+      showToast(`Hubo un error al ${editingLeadId ? 'actualizar' : 'enviar'} los datos. Revisa la URL_DATOS.`, 'error');
     } finally {
       setIsSubmitting(false);
     }
@@ -583,7 +640,6 @@ export default function App() {
       try {
           const data = JSON.parse(textData);
           
-          // Extracción rigurosa para evitar problemas de envoltura en Power Automate
           let rawLeads = [];
           if (Array.isArray(data)) {
             rawLeads = data;
@@ -597,13 +653,11 @@ export default function App() {
              rawLeads = [data];
           }
 
-          // Función para extraer campos de Choice/Lookup de SharePoint ej: {"Value": "Nuevo"}
           const extractValue = (field) => {
             if (field && typeof field === 'object' && field.Value !== undefined) return field.Value;
             return field;
           };
 
-          // Mapeo crudo de SP a variables seguras de FrontEnd
           const mappedLeads = rawLeads.map(item => ({
             id: item.ID || item.id || '',
             titulo: item.Title || item.titulo || item.TITULO || '',
@@ -852,7 +906,13 @@ export default function App() {
         <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
           <div>
             <label className="block text-xs font-bold text-zinc-600 mb-2">Fecha Ingreso</label>
-            <input type="datetime-local" name="fecha_ingreso" required value={formData.fecha_ingreso} onChange={handleChange} className="w-full rounded-sm border-zinc-300 border p-3 text-sm focus:ring-1 focus:ring-black focus:border-black outline-none bg-zinc-50 focus:bg-white transition-colors" />
+            {editingLeadId ? (
+              <div className="w-full rounded-sm border-zinc-300 bg-zinc-100 text-zinc-600 border p-3 text-sm font-medium outline-none cursor-not-allowed" title="Fecha de Ingreso protegida contra modificaciones.">
+                {formData.fecha_ingreso ? new Date(formData.fecha_ingreso).toLocaleString([], { dateStyle: 'short', timeStyle: 'short' }) : '-'}
+              </div>
+            ) : (
+              <input type="datetime-local" name="fecha_ingreso" required value={formData.fecha_ingreso} onChange={handleChange} className="w-full rounded-sm border-zinc-300 border p-3 text-sm focus:ring-1 focus:ring-black focus:border-black outline-none bg-zinc-50 focus:bg-white transition-colors" />
+            )}
           </div>
           <div>
             <label className="block text-xs font-bold text-zinc-600 mb-2">Fecha Control</label>
@@ -861,7 +921,7 @@ export default function App() {
           <div className="md:col-span-2">
             <label className="block text-xs font-bold text-zinc-600 mb-2">Tiempo de Respuesta (Hrs)</label>
             <div className="relative">
-              <input type="text" name="tiempo_respuesta_hrs" readOnly value={formData.tiempo_respuesta_hrs} className="w-full rounded-sm border-zinc-300 bg-zinc-100 text-black border p-3 text-sm font-mono font-semibold outline-none" placeholder="0.00" />
+              <input type="text" name="tiempo_respuesta_hrs" readOnly value={formData.tiempo_respuesta_hrs} className="w-full rounded-sm border-zinc-300 bg-zinc-100 text-black border p-3 text-sm font-mono font-semibold outline-none cursor-not-allowed" placeholder="0.00" />
               {formData.tiempo_respuesta_hrs && <span className="absolute right-3 top-3.5 text-xs font-bold bg-black text-white px-2 py-0.5 rounded-sm">Auto</span>}
             </div>
           </div>
@@ -992,7 +1052,6 @@ export default function App() {
             <textarea name="observaciones" rows="2" value={formData.observaciones} onChange={handleChange} className="w-full rounded-sm border-zinc-300 border p-3 text-sm focus:ring-1 focus:ring-black focus:border-black outline-none bg-zinc-50 focus:bg-white transition-colors resize-none"></textarea>
           </div>
           
-          {/* Visualización de Enlace de Archivo Existente (Solo en modo edición) */}
           {editingLeadId && (
              <div className="md:col-span-2 bg-blue-50 border border-blue-200 p-4 rounded-sm flex items-start gap-3 mt-2">
                 <FileText className="text-blue-500 shrink-0 mt-0.5" size={18} />
@@ -1291,13 +1350,22 @@ export default function App() {
                           )}
                         </td>
                         <td className="p-4 text-center border-l border-zinc-200 bg-zinc-50 group-hover:bg-zinc-100 transition-colors">
-                          <button 
-                            onClick={() => handleEditLead(lead)} 
-                            className="p-2 text-zinc-500 hover:text-black hover:bg-white border border-transparent hover:border-zinc-300 hover:shadow-sm rounded-sm transition-all flex items-center justify-center gap-2 mx-auto"
-                            title="Editar Registro"
-                          >
-                            <Edit2 size={16} />
-                          </button>
+                          <div className="flex items-center justify-center gap-1">
+                            <button 
+                              onClick={() => handleEditLead(lead)} 
+                              className="p-2 text-zinc-500 hover:text-black hover:bg-white border border-transparent hover:border-zinc-300 hover:shadow-sm rounded-sm transition-all flex items-center justify-center"
+                              title="Editar Registro"
+                            >
+                              <Edit2 size={16} />
+                            </button>
+                            <button 
+                              onClick={() => setLeadToDelete(lead)} 
+                              className="p-2 text-zinc-500 hover:text-red-600 hover:bg-red-50 border border-transparent hover:border-red-200 hover:shadow-sm rounded-sm transition-all flex items-center justify-center"
+                              title="Eliminar Registro"
+                            >
+                              <Trash2 size={16} />
+                            </button>
+                          </div>
                         </td>
                       </tr>
                     ))
@@ -1308,6 +1376,46 @@ export default function App() {
           </div>
         )}
 
+        {/* =========================================
+            MODAL DE CONFIRMACIÓN DE ELIMINACIÓN
+        ============================================= */}
+        {leadToDelete && (
+          <div className="fixed inset-0 bg-zinc-900/60 backdrop-blur-sm flex items-center justify-center z-[70] p-4">
+            <div className="bg-white rounded-sm w-full max-w-md shadow-2xl flex flex-col animate-in zoom-in-95 duration-200 overflow-hidden border border-zinc-200">
+              <div className="p-6">
+                <div className="flex items-center gap-3 mb-4 text-red-600">
+                  <Trash2 size={24} />
+                  <h3 className="text-lg font-bold text-black tracking-wide">Eliminar Registro</h3>
+                </div>
+                <p className="text-sm text-zinc-600 leading-relaxed mb-1">
+                  ¿Estás seguro de que deseas eliminar permanentemente a <strong className="text-black">{leadToDelete.titulo || 'este lead'}</strong>?
+                </p>
+                <p className="text-xs text-zinc-500 font-medium">Esta acción eliminará el registro en SharePoint y no se puede deshacer.</p>
+              </div>
+              <div className="bg-zinc-50 border-t border-zinc-200 p-4 flex justify-end items-center gap-3">
+                <button 
+                  onClick={() => setLeadToDelete(null)} 
+                  disabled={isDeleting} 
+                  className="bg-white hover:bg-zinc-100 text-zinc-700 px-5 py-2.5 rounded-sm font-bold text-sm border border-zinc-300 transition-colors"
+                >
+                  Cancelar
+                </button>
+                <button 
+                  onClick={executeDelete} 
+                  disabled={isDeleting} 
+                  className="bg-red-600 hover:bg-red-700 disabled:bg-red-400 text-white px-6 py-2.5 rounded-sm font-bold text-sm transition-all flex items-center gap-2 shadow-sm"
+                >
+                  {isDeleting ? <Loader2 size={16} className="animate-spin" /> : <Trash2 size={16} />}
+                  {isDeleting ? 'Eliminando...' : 'Sí, Eliminar'}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* =========================================
+            MODAL DE EDICIÓN FLOTANTE
+        ============================================= */}
         {showEditModal && editingLeadId && (
            <div className="fixed inset-0 bg-zinc-900/60 backdrop-blur-sm flex items-center justify-center z-[60] p-4">
              <div className="bg-zinc-100 rounded-sm w-full max-w-5xl shadow-2xl flex flex-col max-h-[90vh] border border-zinc-300 animate-in zoom-in-95 duration-200">
