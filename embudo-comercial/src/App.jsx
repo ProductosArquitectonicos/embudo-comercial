@@ -5,7 +5,7 @@ import {
   Star, Bell, X, Settings, Trash2, UserPlus,
   TableProperties, FilePlus2, RefreshCw, Loader2, Database,
   BarChart3, Target, TrendingUp, CalendarX, Moon, Layers, Activity,
-  Search, Filter, ChevronUp, ChevronDown, Terminal, Edit2, Megaphone, Globe, ExternalLink, Link as LinkIcon, Download, CloudUpload, CloudDownload
+  Search, Filter, ChevronUp, ChevronDown, Terminal, Edit2, Megaphone, Globe, ExternalLink, Link as LinkIcon, Download
 } from 'lucide-react';
 
 export default function App() {
@@ -1356,7 +1356,7 @@ export default function App() {
                           )}
                         </td>
                         <td className="p-4 text-center border-l border-zinc-200 bg-zinc-50 group-hover:bg-zinc-100 transition-colors">
-                          <div className="flex items-center justify-center gap-1">
+                          <div className="flex items-center justify-center gap-2">
                             <button 
                               onClick={() => handleEditLead(lead)} 
                               className="p-2 text-zinc-500 hover:text-black hover:bg-white border border-transparent hover:border-zinc-300 hover:shadow-sm rounded-sm transition-all flex items-center justify-center"
@@ -1366,7 +1366,7 @@ export default function App() {
                             </button>
                             <button 
                               onClick={() => setLeadToDelete(lead)} 
-                              className="p-2 text-zinc-500 hover:text-red-600 hover:bg-red-50 border border-transparent hover:border-red-200 hover:shadow-sm rounded-sm transition-all flex items-center justify-center"
+                              className="p-2 text-zinc-500 hover:text-red-600 hover:bg-white border border-transparent hover:border-red-200 hover:shadow-sm rounded-sm transition-all flex items-center justify-center"
                               title="Eliminar Registro"
                             >
                               <Trash2 size={16} />
