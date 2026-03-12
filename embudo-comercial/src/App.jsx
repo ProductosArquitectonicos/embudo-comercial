@@ -490,6 +490,7 @@ export default function App() {
         observaciones: formData.observaciones || "",
         programar_recordatorio: Boolean(formData.programar_recordatorio),
         canal_recordatorio: formData.canal_recordatorio || "",
+        link_adjuntos: formData.link_adjuntos || "", 
         fecha_registro_sistema: new Date().toISOString(),
         correo_asesor: selectedAsesorObj ? selectedAsesorObj.correo : '' 
       };
@@ -577,6 +578,7 @@ export default function App() {
           programar_recordatorio: false,
           canal_recordatorio: "",
           correo_asesor: "",
+          link_adjuntos: "",
           fecha_registro_sistema: ""
       };
 
@@ -958,20 +960,27 @@ export default function App() {
             <textarea name="observaciones" rows="2" value={formData.observaciones} onChange={handleChange} className="w-full rounded-sm border-zinc-300 border p-3 text-sm focus:ring-1 focus:ring-black focus:border-black outline-none bg-zinc-50 focus:bg-white transition-colors resize-none"></textarea>
           </div>
           
-          {editingLeadId && formData.link_adjuntos && (
+          {/* Visualización de Enlace de Archivo Existente (Solo en modo edición) */}
+          {editingLeadId && (
              <div className="md:col-span-2 bg-blue-50 border border-blue-200 p-4 rounded-sm flex items-start gap-3 mt-2">
                 <FileText className="text-blue-500 shrink-0 mt-0.5" size={18} />
                 <div>
-                   <h4 className="text-xs font-bold text-blue-900 uppercase tracking-widest mb-1">Archivos Previos en SharePoint</h4>
-                   <p className="text-sm text-blue-700 mb-2">Este lead ya contiene archivos guardados en el sistema.</p>
-                   <a 
-                      href={formData.link_adjuntos} 
-                      target="_blank" 
-                      rel="noopener noreferrer" 
-                      className="inline-flex items-center gap-2 text-xs font-bold bg-blue-600 text-white px-3 py-1.5 rounded-sm hover:bg-blue-700 transition-colors"
-                   >
-                     Ver Archivos en SharePoint <ExternalLink size={14} />
-                   </a>
+                   <h4 className="text-xs font-bold text-blue-900 uppercase tracking-widest mb-1">Gestión de Archivos</h4>
+                   <p className="text-sm text-blue-700 mb-2">Los archivos adjuntos de este lead se gestionan directamente en tu lista de SharePoint.</p>
+                   {formData.link_adjuntos ? (
+                     <a 
+                        href={formData.link_adjuntos} 
+                        target="_blank" 
+                        rel="noopener noreferrer" 
+                        className="inline-flex items-center gap-2 text-xs font-bold bg-blue-600 text-white px-3 py-1.5 rounded-sm hover:bg-blue-700 transition-colors"
+                     >
+                       Abrir Registro en SharePoint <ExternalLink size={14} />
+                     </a>
+                   ) : (
+                     <span className="inline-flex items-center gap-2 text-xs font-bold bg-blue-200 text-blue-800 px-3 py-1.5 rounded-sm cursor-not-allowed" title="SharePoint no devolvió un enlace de adjuntos para este registro.">
+                       Enlace no disponible <ExternalLink size={14} />
+                     </span>
+                   )}
                 </div>
              </div>
           )}
