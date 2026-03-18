@@ -477,7 +477,7 @@ export default function App() {
         razon_calificacion: "", notas_seguimiento: "", fecha_actualizacion_nota: "",
         fecha_seguimiento_dia: "", jornada_seguimiento: "", hora_seguimiento: "",
         accion: "", estado_orden: "", fecha_cierre: "", observaciones: "",
-        programar_recordatorio: false, canal_recordatorio: "", correo_asesor: "",
+        programar_recordatorio: false, canal_recordatorio: "", email_asesor: "",
         fecha_registro_sistema: ""
       };
 
@@ -520,7 +520,8 @@ export default function App() {
     addLog(isUpdate ? 'Enviando petición UPDATE...' : 'Enviando petición POST...', 'info');
 
     try {
-      const selectedAsesorObj = asesoresList.find(a => a.nombre === formData.asesor);
+      const asesorSeleccionadoNombre = formData.asesor ? formData.asesor.trim() : '';
+      const selectedAsesorObj = asesoresList.find(a => a.nombre.trim() === asesorSeleccionadoNombre);
       
       const payload = {
         tipo: isUpdate ? "UPDATE" : "POST",
@@ -551,7 +552,7 @@ export default function App() {
         programar_recordatorio: Boolean(formData.programar_recordatorio),
         canal_recordatorio: formData.canal_recordatorio || "",
         fecha_registro_sistema: new Date().toISOString(),
-        correo_asesor: selectedAsesorObj ? selectedAsesorObj.correo : '' 
+        email_asesor: selectedAsesorObj ? selectedAsesorObj.correo : '' 
       };
 
       const response = await fetch(paConfig.urlDatos, {
@@ -615,7 +616,7 @@ export default function App() {
           razon_calificacion: "", notas_seguimiento: "", fecha_actualizacion_nota: "",
           fecha_seguimiento_dia: "", jornada_seguimiento: "", hora_seguimiento: "",
           accion: "", estado_orden: "", fecha_cierre: "", observaciones: "",
-          programar_recordatorio: false, canal_recordatorio: "", correo_asesor: "",
+          programar_recordatorio: false, canal_recordatorio: "", email_asesor: "",
           fecha_registro_sistema: ""
       };
 
@@ -768,15 +769,26 @@ export default function App() {
 
     let potenciales = 0, calificados = 0, noCalificados = 0, ventasCerradas = 0;
     let organicos = 0, pauta = 0, finDeSemana = 0, fueraHorario = 0;
+    let ordenesAbiertas = 0, ordenesCerradas = 0;
     const calificacionCount = {};
     const lineasCount = {};
+    const accionesCount = {};
 
     itemsForReports.forEach(lead => {
       const calif = lead.calificacion_lead || 'Por evaluar';
       calificacionCount[calif] = (calificacionCount[calif] || 0) + 1;
       
       if (calif === 'Caliente' || calif === 'Tibio') { potenciales++; calificados++; } else { noCalificados++; }
-      if (lead.estado_orden === 'Cerrada' || lead.accion === 'Venta') ventasCerradas++;
+      
+      // NUEVO: Efectividad únicamente por venta
+      if (lead.accion === 'Venta') ventasCerradas++;
+
+      // NUEVO: Estado de las órdenes
+      if (lead.estado_orden === 'Cerrada') ordenesCerradas++;
+      else if (lead.estado_orden === 'Abierta') ordenesAbiertas++;
+
+      const acc = lead.accion || 'Sin asignar';
+      accionesCount[acc] = (accionesCount[acc] || 0) + 1;
 
       const fuente = (lead.fuente_medio || '').toLowerCase();
       if (fuente.includes('orgánico') || fuente.includes('organico') || fuente.includes('seo') || fuente.includes('directo')) {
@@ -801,7 +813,8 @@ export default function App() {
 
     return {
       total, potenciales, calificados, noCalificados, ventasCerradas, efectividadPorcentaje,
-      organicos, pauta, finDeSemana, fueraHorario, calificacionCount, lineasCount
+      organicos, pauta, finDeSemana, fueraHorario, calificacionCount, lineasCount,
+      ordenesAbiertas, ordenesCerradas, accionesCount
     };
   }, [savedLeads, filterMes, reportFilterCalificacion]);
 
@@ -810,11 +823,13 @@ export default function App() {
     const csvRows = [];
     csvRows.push(['Metrica', 'Valor']);
     csvRows.push(['Total Leads', reportes.total]);
-    csvRows.push(['Ventas Cerradas', reportes.ventasCerradas]);
+    csvRows.push(['Ventas', reportes.ventasCerradas]);
     csvRows.push(['Efectividad (%)', reportes.efectividadPorcentaje]);
     csvRows.push(['Potenciales (Tibio/Caliente)', reportes.potenciales]);
     csvRows.push(['Calificados', reportes.calificados]);
     csvRows.push(['No Calificados', reportes.noCalificados]);
+    csvRows.push(['Órdenes Abiertas', reportes.ordenesAbiertas]);
+    csvRows.push(['Órdenes Cerradas', reportes.ordenesCerradas]);
     csvRows.push(['Organico / SEO', reportes.organicos]);
     csvRows.push(['Pauta / Pago', reportes.pauta]);
     csvRows.push(['Fuera de Horario', reportes.fueraHorario]);
@@ -823,6 +838,10 @@ export default function App() {
     csvRows.push([]);
     csvRows.push(['Desglose por Calificacion', 'Cantidad']);
     Object.entries(reportes.calificacionCount).forEach(([k, v]) => csvRows.push([k, v]));
+
+    csvRows.push([]);
+    csvRows.push(['Acciones', 'Cantidad']);
+    Object.entries(reportes.accionesCount).forEach(([k, v]) => csvRows.push([k, v]));
 
     csvRows.push([]);
     csvRows.push(['Lineas de Interes Solicitadas', 'Cantidad']);
@@ -839,7 +858,6 @@ export default function App() {
     document.body.removeChild(link);
   };
 
-  // Convertido en función renderizadora para evitar pérdida de foco en React al re-renderizar
   const renderFormFields = () => (
     <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 p-1">
       <div className="bg-white p-7 rounded-sm shadow-sm border border-zinc-200 space-y-6">
@@ -1530,7 +1548,7 @@ export default function App() {
                   
                   <div className="bg-white p-6 rounded-sm shadow-sm border border-zinc-200 flex flex-col justify-between">
                     <div className="flex items-center justify-between mb-4">
-                      <h3 className="text-xs font-bold uppercase tracking-wider text-zinc-500">Efectividad (Cierres)</h3>
+                      <h3 className="text-xs font-bold uppercase tracking-wider text-zinc-500">Efectividad (Ventas)</h3>
                       <TrendingUp size={18} className="text-black" />
                     </div>
                     <div className="flex items-baseline gap-2">
@@ -1570,6 +1588,46 @@ export default function App() {
                 </div>
 
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                  {/* Estado de las Órdenes */}
+                  <div className="bg-white p-6 rounded-sm shadow-sm border border-zinc-200">
+                    <h3 className="text-sm font-bold text-black uppercase tracking-wide mb-6 border-b border-zinc-100 pb-3 flex items-center gap-2">
+                       Estado de las Órdenes
+                    </h3>
+                    <div className="flex items-center justify-center gap-8 h-48">
+                      <div className="text-center group flex-1 bg-zinc-50 p-4 rounded-sm border border-zinc-200 hover:border-black transition-colors">
+                        <Briefcase size={28} className="text-zinc-400 mb-3 mx-auto" />
+                        <p className="text-4xl font-black text-black">{reportes.ordenesAbiertas}</p>
+                        <p className="text-xs font-bold text-zinc-500 uppercase tracking-wider mt-2">Abiertas</p>
+                      </div>
+                      <div className="text-center group flex-1 bg-zinc-50 p-4 rounded-sm border border-zinc-200 hover:border-black transition-colors">
+                        <CheckCircle size={28} className="text-zinc-400 mb-3 mx-auto" />
+                        <p className="text-4xl font-black text-black">{reportes.ordenesCerradas}</p>
+                        <p className="text-xs font-bold text-zinc-500 uppercase tracking-wider mt-2">Cerradas</p>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Gráfico Barras Horizontales: Acciones */}
+                  <div className="bg-white p-6 rounded-sm shadow-sm border border-zinc-200">
+                    <h3 className="text-sm font-bold text-black uppercase tracking-wide mb-6 border-b border-zinc-100 pb-3">Embudo de Acciones</h3>
+                    <div className="space-y-5 max-h-[220px] overflow-y-auto pr-2 custom-scrollbar">
+                      {Object.entries(reportes.accionesCount).sort((a,b) => b[1] - a[1]).map(([accion, count]) => {
+                        const percent = reportes.total > 0 ? (count / reportes.total) * 100 : 0;
+                        return (
+                          <div key={accion} className="group">
+                            <div className="flex justify-between text-xs font-bold mb-1.5">
+                              <span className="text-zinc-700">{accion}</span>
+                              <span className="text-black">{count} <span className="text-zinc-400 text-[10px]">({percent.toFixed(0)}%)</span></span>
+                            </div>
+                            <div className="w-full bg-zinc-100 h-3 rounded-sm overflow-hidden">
+                              <div className="h-full rounded-sm bg-emerald-500 group-hover:bg-emerald-600 transition-colors" style={{ width: `${percent}%` }}></div>
+                            </div>
+                          </div>
+                        )
+                      })}
+                    </div>
+                  </div>
+
                   {/* Gráfico de Barras Vertical: Calificación */}
                   <div className="bg-white p-6 rounded-sm shadow-sm border border-zinc-200 flex flex-col">
                     <h3 className="text-sm font-bold text-black uppercase tracking-wide mb-6 border-b border-zinc-100 pb-3">Desglose por Calificación</h3>
