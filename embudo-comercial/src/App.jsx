@@ -102,8 +102,21 @@ function PantallaLoginMS() {
       <div className="absolute bottom-[-10%] right-[-10%] w-96 h-96 bg-zinc-400 rounded-full mix-blend-multiply filter blur-3xl opacity-20"></div>
 
       <div className="bg-white p-10 rounded-sm shadow-xl border border-zinc-200 max-w-md w-full text-center flex flex-col items-center z-10 animate-in zoom-in-95 duration-500">
-        <div className="w-20 h-20 mb-6 bg-black rounded-sm flex items-center justify-center shadow-md">
-          <span className="text-4xl font-black text-white tracking-tighter leading-none">pa</span>
+        <div className="h-24 mb-6 flex items-center justify-center">
+          <img 
+            src="/logo.jpg" 
+            alt="Logo" 
+            className="h-full object-contain"
+            onError={(e) => {
+              e.target.onerror = null; 
+              e.target.style.display = 'none';
+              const fallback = document.getElementById('fallback-login-logo');
+              if (fallback) fallback.style.display = 'flex';
+            }}
+          />
+          <div id="fallback-login-logo" className="hidden w-20 h-20 bg-black rounded-sm flex-col items-center justify-center shadow-md">
+            <span className="text-4xl font-black text-white tracking-tighter leading-none">pa</span>
+          </div>
         </div>
         <h1 className="text-2xl font-bold text-black mb-2">Embudo Comercial</h1>
         <p className="text-zinc-500 text-sm mb-8 leading-relaxed font-medium">
@@ -1258,7 +1271,18 @@ function MainApp() {
         <header className="flex flex-col md:flex-row items-start md:items-center justify-between bg-white p-6 rounded-sm shadow-sm border border-zinc-200 gap-4">
           <div className="flex items-center gap-4">
             <div className="flex items-center gap-4 pr-5 border-r border-zinc-200 h-16">
-              <div className="h-full w-16 bg-black flex items-center justify-center rounded-sm">
+              <img 
+                src="/logo.jpg" 
+                alt="Logo" 
+                className="h-full object-contain py-1"
+                onError={(e) => {
+                  e.target.onerror = null; 
+                  e.target.style.display = 'none';
+                  const fallback = document.getElementById('fallback-main-logo');
+                  if (fallback) fallback.style.display = 'flex';
+                }}
+              />
+              <div id="fallback-main-logo" className="hidden h-full w-16 bg-black flex-col items-center justify-center rounded-sm">
                 <h1 className="text-3xl font-black text-white tracking-tighter leading-none">pa</h1>
               </div>
             </div>
@@ -1905,190 +1929,6 @@ function MainApp() {
             </div>
           </div>
         )}
-
-        {showAdminModal && (
-          <div className="fixed inset-0 bg-zinc-900/60 backdrop-blur-sm flex items-center justify-center z-[60] p-4">
-            <div className="bg-white rounded-sm w-full max-w-xl shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200 border border-zinc-200 flex flex-col max-h-[85vh]">
-              
-              <div className="flex border-b border-zinc-200 bg-zinc-50 relative">
-                <div className="flex flex-1 overflow-x-auto custom-scrollbar">
-                  <button 
-                    onClick={() => setAdminTab('asesores')}
-                    className={`whitespace-nowrap flex-1 p-4 text-xs font-bold border-b-2 transition-colors ${adminTab === 'asesores' ? 'border-black text-black bg-white' : 'border-transparent text-zinc-400 hover:text-black'}`}
-                  >
-                    Asesores
-                  </button>
-                  <button 
-                    onClick={() => setAdminTab('lineas')}
-                    className={`whitespace-nowrap flex-1 p-4 text-xs font-bold border-b-2 transition-colors ${adminTab === 'lineas' ? 'border-black text-black bg-white' : 'border-transparent text-zinc-400 hover:text-black'}`}
-                  >
-                    Líneas de Interés
-                  </button>
-                  <button 
-                    onClick={() => setAdminTab('acciones')}
-                    className={`whitespace-nowrap flex-1 p-4 text-xs font-bold border-b-2 transition-colors ${adminTab === 'acciones' ? 'border-black text-black bg-white' : 'border-transparent text-zinc-400 hover:text-black'}`}
-                  >
-                    Acciones
-                  </button>
-                  <button 
-                    onClick={() => setAdminTab('fuentes')}
-                    className={`whitespace-nowrap flex-1 p-4 text-xs font-bold border-b-2 transition-colors ${adminTab === 'fuentes' ? 'border-black text-black bg-white' : 'border-transparent text-zinc-400 hover:text-black'}`}
-                  >
-                    Fuentes
-                  </button>
-                  <button 
-                    onClick={() => setAdminTab('campanias')}
-                    className={`whitespace-nowrap flex-1 p-4 text-xs font-bold border-b-2 transition-colors ${adminTab === 'campanias' ? 'border-black text-black bg-white' : 'border-transparent text-zinc-400 hover:text-black'}`}
-                  >
-                    Campañas
-                  </button>
-                </div>
-                
-                <button 
-                  onClick={() => setShowAdminModal(false)} 
-                  className="p-4 text-zinc-500 hover:text-black transition-colors bg-white border-l border-zinc-200 shrink-0 z-10 drop-shadow-sm"
-                  title="Cerrar (ESC)"
-                >
-                  <X size={18} />
-                </button>
-              </div>
-              
-              <div className="p-7 overflow-y-auto flex-1 custom-scrollbar">
-                {adminTab === 'asesores' && (
-                  <div className="animate-in fade-in">
-                    <div className="flex flex-col gap-3 mb-6 bg-zinc-50 p-4 border border-zinc-200 rounded-sm">
-                      <div className="flex flex-col sm:flex-row gap-3">
-                        <input 
-                          type="text" value={newAsesorName} onChange={(e) => setNewAsesorName(e.target.value)}
-                          placeholder="Nombre del asesor..."
-                          className="flex-1 rounded-sm border-zinc-300 border p-3 text-sm focus:ring-1 focus:ring-black focus:border-black outline-none bg-white"
-                        />
-                        <input 
-                          type="email" value={newAsesorEmail} onChange={(e) => setNewAsesorEmail(e.target.value)}
-                          onKeyDown={(e) => e.key === 'Enter' && handleAddAsesor()}
-                          placeholder="Correo del asesor..."
-                          className="flex-1 rounded-sm border-zinc-300 border p-3 text-sm focus:ring-1 focus:ring-black focus:border-black outline-none bg-white"
-                        />
-                        <button onClick={handleAddAsesor} disabled={!newAsesorName.trim()} className="bg-black hover:bg-zinc-800 disabled:bg-zinc-300 text-white px-5 py-3 rounded-sm font-bold text-sm transition-colors flex items-center justify-center gap-2 sm:w-auto w-full">
-                          <UserPlus size={16} /> Agregar
-                        </button>
-                      </div>
-                    </div>
-                    <div className="space-y-2 pr-2">
-                      {asesoresList.map(asesor => (
-                        <div key={asesor.nombre} className="flex items-center justify-between bg-white border border-zinc-200 p-3.5 rounded-sm hover:border-black transition-colors">
-                          <div className="flex flex-col">
-                            <span className="text-sm font-bold text-black">{asesor.nombre}</span>
-                            {asesor.correo && <span className="text-xs text-zinc-500 font-mono mt-0.5">{asesor.correo}</span>}
-                          </div>
-                          <button onClick={() => handleRemoveAsesor(asesor.nombre)} className="text-zinc-400 hover:text-red-600 transition-colors"><Trash2 size={16} /></button>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-
-                {adminTab === 'lineas' && (
-                  <div className="animate-in fade-in">
-                    <div className="flex gap-3 mb-6">
-                      <input 
-                        type="text" value={newLineaName} onChange={(e) => setNewLineaName(e.target.value)}
-                        onKeyDown={(e) => e.key === 'Enter' && handleAddLinea()}
-                        placeholder="Nueva línea de interés..."
-                        className="flex-1 rounded-sm border-zinc-300 border p-3 text-sm focus:ring-1 focus:ring-black focus:border-black outline-none bg-zinc-50 focus:bg-white"
-                      />
-                      <button onClick={handleAddLinea} disabled={!newLineaName.trim()} className="bg-black hover:bg-zinc-800 disabled:bg-zinc-300 text-white px-5 py-3 rounded-sm font-bold text-sm transition-colors flex items-center gap-2">
-                        <Layers size={16} /> Agregar
-                      </button>
-                    </div>
-                    <div className="space-y-2 pr-2">
-                      {lineasList.map(linea => (
-                        <div key={linea} className="flex items-center justify-between bg-white border border-zinc-200 p-3.5 rounded-sm hover:border-black transition-colors">
-                          <span className="text-sm font-bold text-black">{linea}</span>
-                          <button onClick={() => handleRemoveLinea(linea)} className="text-zinc-400 hover:text-red-600 transition-colors"><Trash2 size={16} /></button>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-
-                {adminTab === 'acciones' && (
-                  <div className="animate-in fade-in">
-                    <div className="flex gap-3 mb-6">
-                      <input 
-                        type="text" value={newAccionName} onChange={(e) => setNewAccionName(e.target.value)}
-                        onKeyDown={(e) => e.key === 'Enter' && handleAddAccion()}
-                        placeholder="Nueva acción requerida..."
-                        className="flex-1 rounded-sm border-zinc-300 border p-3 text-sm focus:ring-1 focus:ring-black focus:border-black outline-none bg-zinc-50 focus:bg-white"
-                      />
-                      <button onClick={handleAddAccion} disabled={!newAccionName.trim()} className="bg-black hover:bg-zinc-800 disabled:bg-zinc-300 text-white px-5 py-3 rounded-sm font-bold text-sm transition-colors flex items-center gap-2">
-                        <Activity size={16} /> Agregar
-                      </button>
-                    </div>
-                    <div className="space-y-2 pr-2">
-                      {accionesList.map(accion => (
-                        <div key={accion} className="flex items-center justify-between bg-white border border-zinc-200 p-3.5 rounded-sm hover:border-black transition-colors">
-                          <span className="text-sm font-bold text-black">{accion}</span>
-                          <button onClick={() => handleRemoveAccion(accion)} className="text-zinc-400 hover:text-red-600 transition-colors"><Trash2 size={16} /></button>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-
-                {adminTab === 'fuentes' && (
-                  <div className="animate-in fade-in">
-                    <div className="flex gap-3 mb-6">
-                      <input 
-                        type="text" value={newFuenteName} onChange={(e) => setNewFuenteName(e.target.value)}
-                        onKeyDown={(e) => e.key === 'Enter' && handleAddFuente()}
-                        placeholder="Nueva fuente (Ej. GOOGLE PAID)..."
-                        className="flex-1 rounded-sm border-zinc-300 border p-3 text-sm focus:ring-1 focus:ring-black focus:border-black outline-none bg-zinc-50 focus:bg-white"
-                      />
-                      <button onClick={handleAddFuente} disabled={!newFuenteName.trim()} className="bg-black hover:bg-zinc-800 disabled:bg-zinc-300 text-white px-5 py-3 rounded-sm font-bold text-sm transition-colors flex items-center gap-2">
-                        <Globe size={16} /> Agregar
-                      </button>
-                    </div>
-                    <div className="space-y-2 pr-2">
-                      {fuentesList.map(fuente => (
-                        <div key={fuente} className="flex items-center justify-between bg-white border border-zinc-200 p-3.5 rounded-sm hover:border-black transition-colors">
-                          <span className="text-sm font-bold text-black">{fuente}</span>
-                          <button onClick={() => handleRemoveFuente(fuente)} className="text-zinc-400 hover:text-red-600 transition-colors"><Trash2 size={16} /></button>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-
-                {adminTab === 'campanias' && (
-                  <div className="animate-in fade-in">
-                    <div className="flex gap-3 mb-6">
-                      <input 
-                        type="text" value={newCampaniaName} onChange={(e) => setNewCampaniaName(e.target.value)}
-                        onKeyDown={(e) => e.key === 'Enter' && handleAddCampania()}
-                        placeholder="Nueva campaña..."
-                        className="flex-1 rounded-sm border-zinc-300 border p-3 text-sm focus:ring-1 focus:ring-black focus:border-black outline-none bg-zinc-50 focus:bg-white"
-                      />
-                      <button onClick={handleAddCampania} disabled={!newCampaniaName.trim()} className="bg-black hover:bg-zinc-800 disabled:bg-zinc-300 text-white px-5 py-3 rounded-sm font-bold text-sm transition-colors flex items-center gap-2">
-                        <Megaphone size={16} /> Agregar
-                      </button>
-                    </div>
-                    <div className="space-y-2 pr-2">
-                      {campaniasList.map(campania => (
-                        <div key={campania} className="flex items-center justify-between bg-white border border-zinc-200 p-3.5 rounded-sm hover:border-black transition-colors">
-                          <span className="text-sm font-bold text-black">{campania}</span>
-                          <button onClick={() => handleRemoveCampania(campania)} className="text-zinc-400 hover:text-red-600 transition-colors"><Trash2 size={16} /></button>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-
-              </div>
-            </div>
-          </div>
-        )}
-
       </div>
     </div>
   );
