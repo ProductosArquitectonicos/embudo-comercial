@@ -240,7 +240,6 @@ function MainApp() {
       const parsed = JSON.parse(savedList);
       if (!Array.isArray(parsed)) return defaultList;
       
-      // Asegurarse de que todo lo que salga de aquí sea un string válido
       return parsed
         .filter(item => item !== null && item !== undefined)
         .map(item => {
@@ -517,8 +516,8 @@ function MainApp() {
 
   useEffect(() => {
     if (formData.fecha_ingreso && formData.fecha_control) {
-      const ingreso = new Date(formData.fecha_ingreso);
-      const control = new Date(formData.fecha_control);
+      const ingreso = new Date(formData.fecha_ingreso.length === 16 ? `${formData.fecha_ingreso}-05:00` : formData.fecha_ingreso);
+      const control = new Date(formData.fecha_control.length === 16 ? `${formData.fecha_control}-05:00` : formData.fecha_control);
       if (!isNaN(ingreso.getTime()) && !isNaN(control.getTime())) {
         const diffMs = control - ingreso;
         const diffHrs = (diffMs / (1000 * 60 * 60)).toFixed(2);
@@ -550,14 +549,26 @@ function MainApp() {
     return item;
   };
 
-  // --- FORMATEADORES SEGUROS DE HORA (Ajustan UTC a Local para el Formulario) ---
+  // --- FORMATEADORES SEGUROS DE HORA (Ajustan UTC a Local Bogotá para el Formulario) ---
   const formatDateTime = (val) => {
     if (!val) return '';
     try {
       const d = new Date(val);
       if (isNaN(d.getTime())) return String(val).substring(0, 16);
-      const pad = (n) => n.toString().padStart(2, '0');
-      return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+      
+      const f = new Intl.DateTimeFormat('en-US', {
+          timeZone: 'America/Bogota',
+          year: 'numeric', month: '2-digit', day: '2-digit',
+          hour: '2-digit', minute: '2-digit', hour12: false
+      });
+      const parts = f.formatToParts(d);
+      const map = {};
+      parts.forEach(p => map[p.type] = p.value);
+      
+      let hr = map.hour;
+      if (hr === '24') hr = '00';
+
+      return `${map.year}-${map.month}-${map.day}T${hr}:${map.minute}`;
     } catch(e) {
       return String(val).substring(0, 16);
     }
@@ -568,8 +579,14 @@ function MainApp() {
     try {
        const d = new Date(val);
        if (isNaN(d.getTime())) return String(val).split('T')[0];
-       const pad = (n) => n.toString().padStart(2, '0');
-       return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
+       const f = new Intl.DateTimeFormat('en-US', {
+          timeZone: 'America/Bogota',
+          year: 'numeric', month: '2-digit', day: '2-digit'
+       });
+       const parts = f.formatToParts(d);
+       const map = {};
+       parts.forEach(p => map[p.type] = p.value);
+       return `${map.year}-${map.month}-${map.day}`;
     } catch(e) {
        return String(val).split('T')[0];
     }
@@ -584,7 +601,12 @@ function MainApp() {
   const toSPDate = (localStr) => {
     if (!localStr) return "";
     try { 
-      return new Date(localStr).toISOString(); 
+      let dateStr = localStr;
+      // Si viene del input local (YYYY-MM-DDTHH:mm), forzamos la zona horaria de Bogotá (UTC-5)
+      if (dateStr.length === 16) {
+          dateStr = `${dateStr}-05:00`;
+      }
+      return new Date(dateStr).toISOString(); 
     } 
     catch(e) { return localStr; }
   };
@@ -782,11 +804,11 @@ function MainApp() {
 
       if (formData.programar_recordatorio && formData.fecha_seguimiento_dia) {
         const timeString = formData.hora_seguimiento || '00:00';
-        const fechaSeg = new Date(`${formData.fecha_seguimiento_dia}T${timeString}:00`);
+        const fechaSeg = new Date(`${formData.fecha_seguimiento_dia}T${timeString}:00-05:00`);
         fechaSeg.setHours(fechaSeg.getHours() - 1);
         
         setScheduledReminder({ 
-          fecha: fechaSeg.toLocaleString([], { dateStyle: 'short', timeStyle: 'short' }), 
+          fecha: fechaSeg.toLocaleString('es-CO', { timeZone: 'America/Bogota', dateStyle: 'short', timeStyle: 'short' }), 
           canal: formData.canal_recordatorio === 'teams' ? 'Microsoft Teams' : 'Correo Electrónico' 
         });
       }
@@ -994,10 +1016,19 @@ function MainApp() {
 
       if (lead.fecha_ingreso) {
         const fecha = new Date(lead.fecha_ingreso);
-        const dia = fecha.getDay(); 
-        const hora = fecha.getHours();
-        if (dia === 0 || dia === 6) finDeSemana++;
-        else if (hora < 8 || hora >= 18) fueraHorario++;
+        if (!isNaN(fecha.getTime())) {
+            const formatter = new Intl.DateTimeFormat('en-US', { timeZone: 'America/Bogota', weekday: 'short', hour: 'numeric', hour12: false });
+            const parts = formatter.formatToParts(fecha);
+            const map = {};
+            parts.forEach(p => map[p.type] = p.value);
+            
+            const dayStr = map.weekday; 
+            let hora = parseInt(map.hour, 10);
+            if (map.hour === '24') hora = 0;
+            
+            if (dayStr === 'Sat' || dayStr === 'Sun') finDeSemana++;
+            else if (hora < 8 || hora >= 18) fueraHorario++;
+        }
       }
 
       const linea = lead.linea_interes || 'No especificada';
@@ -1550,7 +1581,7 @@ function MainApp() {
                       <tr key={`lead-${lead.id || index}`} className="hover:bg-zinc-50 transition-colors group text-sm text-zinc-700">
                         <td className="p-4 font-black text-indigo-600 text-center">#{lead.id}</td>
                         <td className="p-4 font-bold text-black">{lead.titulo || '-'}</td>
-                        <td className="p-4">{lead.fecha_ingreso ? new Date(lead.fecha_ingreso).toLocaleString([],{dateStyle:'short', timeStyle:'short'}) : '-'}</td>
+                        <td className="p-4">{lead.fecha_ingreso ? new Date(lead.fecha_ingreso).toLocaleString('es-CO', { timeZone: 'America/Bogota', dateStyle: 'short', timeStyle: 'short' }) : '-'}</td>
                         <td className="p-4">{lead.asesor || '-'}</td>
                         <td className="p-4">{lead.linea_interes || '-'}</td>
                         <td className="p-4 text-xs font-bold text-zinc-500">{lead.fuente_medio || '-'}</td>
