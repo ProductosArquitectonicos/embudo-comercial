@@ -10,7 +10,7 @@ import {
 } from 'lucide-react';
 
 // ============================================================================
-// 🚀 IMPORTS 
+// 🚀 IMPORTS REALES (DESCOMENTAR EN VERCEL)
 // ============================================================================
 import { PublicClientApplication } from '@azure/msal-browser';
 import { MsalProvider, useMsal, useIsAuthenticated } from '@azure/msal-react';
@@ -233,36 +233,57 @@ function MainApp() {
   const [reportFilterCalificacion, setReportFilterCalificacion] = useState(''); 
   const [sortConfig, setSortConfig] = useState({ key: 'id', direction: 'descending' });
 
-  const getInitialList = (key, defaultList) => {
-    const savedList = localStorage.getItem(key);
+  // --- FILTROS DE SEGURIDAD PARA LISTAS CORRUPTAS ---
+  const getInitialStringList = (key, defaultList) => {
     try {
-      return savedList ? JSON.parse(savedList) : defaultList;
+      const savedList = localStorage.getItem(key);
+      if (!savedList) return defaultList;
+      const parsed = JSON.parse(savedList);
+      if (!Array.isArray(parsed)) return defaultList;
+      
+      // Asegurarse de que todo lo que salga de aquí sea un string válido
+      return parsed
+        .filter(item => item !== null && item !== undefined)
+        .map(item => {
+          if (typeof item === 'string') return item.trim();
+          if (typeof item === 'object') return String(item.Value || item.nombre || item.Title || '').trim();
+          return String(item).trim();
+        })
+        .filter(item => item !== '');
     } catch(e) {
       return defaultList;
     }
   };
 
   const getInitialAsesoresList = () => {
-    const savedList = localStorage.getItem('asesoresList');
-    if (savedList) {
-      try {
-        const parsed = JSON.parse(savedList);
-        if (Array.isArray(parsed)) {
-          if (parsed.length > 0 && typeof parsed[0] === 'string') {
-            return parsed.map(nombre => ({ nombre, correo: '' })).sort((a, b) => (a?.nombre || '').localeCompare(b?.nombre || ''));
-          }
-          return parsed.sort((a, b) => (a?.nombre || '').localeCompare(b?.nombre || ''));
+    try {
+      const savedList = localStorage.getItem('asesoresList');
+      if (!savedList) return [];
+      const parsed = JSON.parse(savedList);
+      if (!Array.isArray(parsed)) return [];
+      
+      const mapped = parsed.map(item => {
+        if (typeof item === 'string') return { nombre: item.trim(), correo: '' };
+        if (typeof item === 'object' && item !== null) {
+          return { 
+            nombre: String(item.nombre || item.Title || '').trim(), 
+            correo: String(item.correo || item.email || '').trim() 
+          };
         }
-      } catch(e) {}
+        return null;
+      }).filter(a => a && a.nombre);
+      
+      return mapped.sort((a, b) => a.nombre.localeCompare(b.nombre));
+    } catch(e) {
+      return [];
     }
-    return [];
   };
   
   const [asesoresList, setAsesoresList] = useState(getInitialAsesoresList);
-  const [lineasList, setLineasList] = useState(() => getInitialList('lineasList', []));
-  const [accionesList, setAccionesList] = useState(() => getInitialList('accionesList', []));
-  const [fuentesList, setFuentesList] = useState(() => getInitialList('fuentesList', []));
-  const [campaniasList, setCampaniasList] = useState(() => getInitialList('campaniasList', []));
+  const [lineasList, setLineasList] = useState(() => getInitialStringList('lineasList', []));
+  const [accionesList, setAccionesList] = useState(() => getInitialStringList('accionesList', []));
+  const [fuentesList, setFuentesList] = useState(() => getInitialStringList('fuentesList', []));
+  const [campaniasList, setCampaniasList] = useState(() => getInitialStringList('campaniasList', []));
   
   const [showAdminModal, setShowAdminModal] = useState(false);
   const [adminTab, setAdminTab] = useState('asesores'); 
@@ -318,11 +339,11 @@ function MainApp() {
         nombre, correo: correosAsesores[i] || '' 
       }));
 
-      if(extractedAsesores.length > 0) setAsesoresList(extractedAsesores.sort((a, b) => (a?.nombre || '').localeCompare(b?.nombre || '')));
-      if(configData.LINEAS_INTERES) setLineasList(parseSemicolonString(configData.LINEAS_INTERES).sort((a, b) => (a || '').localeCompare(b || '')));
-      if(configData.ACCIONES) setAccionesList(parseSemicolonString(configData.ACCIONES).sort((a, b) => (a || '').localeCompare(b || '')));
-      if(configData.FUENTES) setFuentesList(parseSemicolonString(configData.FUENTES).sort((a, b) => (a || '').localeCompare(b || '')));
-      if(configData.CAMPANIAS) setCampaniasList(parseSemicolonString(configData.CAMPANIAS).sort((a, b) => (a || '').localeCompare(b || '')));
+      if(extractedAsesores.length > 0) setAsesoresList(extractedAsesores.sort((a, b) => a.nombre.localeCompare(b.nombre)));
+      if(configData.LINEAS_INTERES) setLineasList(parseSemicolonString(configData.LINEAS_INTERES).sort((a, b) => a.localeCompare(b)));
+      if(configData.ACCIONES) setAccionesList(parseSemicolonString(configData.ACCIONES).sort((a, b) => a.localeCompare(b)));
+      if(configData.FUENTES) setFuentesList(parseSemicolonString(configData.FUENTES).sort((a, b) => a.localeCompare(b)));
+      if(configData.CAMPANIAS) setCampaniasList(parseSemicolonString(configData.CAMPANIAS).sort((a, b) => a.localeCompare(b)));
 
       addLog('Configuración sincronizada desde la Nube.', 'success');
     } catch (error) {
@@ -386,7 +407,7 @@ function MainApp() {
   const handleAddAsesor = () => {
     const trimmedName = newAsesorName.trim();
     if (trimmedName && !asesoresList.some(a => a.nombre === trimmedName)) {
-      const newList = [...asesoresList, { nombre: trimmedName, correo: newAsesorEmail.trim() }].sort((a, b) => (a?.nombre || '').localeCompare(b?.nombre || ''));
+      const newList = [...asesoresList, { nombre: trimmedName, correo: newAsesorEmail.trim() }].sort((a, b) => a.nombre.localeCompare(b.nombre));
       setAsesoresList(newList);
       setNewAsesorName('');
       setNewAsesorEmail('');
@@ -405,7 +426,7 @@ function MainApp() {
 
   const handleAddLinea = () => {
     if (newLineaName.trim() && !lineasList.includes(newLineaName.trim())) {
-      const newList = [...lineasList, newLineaName.trim()].sort((a, b) => (a || '').localeCompare(b || ''));
+      const newList = [...lineasList, newLineaName.trim()].sort((a, b) => a.localeCompare(b));
       setLineasList(newList);
       setNewLineaName('');
       syncConfigToCloud({ lineas: newList });
@@ -421,7 +442,7 @@ function MainApp() {
 
   const handleAddAccion = () => {
     if (newAccionName.trim() && !accionesList.includes(newAccionName.trim())) {
-      const newList = [...accionesList, newAccionName.trim()].sort((a, b) => (a || '').localeCompare(b || ''));
+      const newList = [...accionesList, newAccionName.trim()].sort((a, b) => a.localeCompare(b));
       setAccionesList(newList);
       setNewAccionName('');
       syncConfigToCloud({ acciones: newList });
@@ -437,7 +458,7 @@ function MainApp() {
 
   const handleAddFuente = () => {
     if (newFuenteName.trim() && !fuentesList.includes(newFuenteName.trim().toUpperCase())) {
-      const newList = [...fuentesList, newFuenteName.trim().toUpperCase()].sort((a, b) => (a || '').localeCompare(b || ''));
+      const newList = [...fuentesList, newFuenteName.trim().toUpperCase()].sort((a, b) => a.localeCompare(b));
       setFuentesList(newList);
       setNewFuenteName('');
       syncConfigToCloud({ fuentes: newList });
@@ -453,7 +474,7 @@ function MainApp() {
 
   const handleAddCampania = () => {
     if (newCampaniaName.trim() && !campaniasList.includes(newCampaniaName.trim())) {
-      const newList = [...campaniasList, newCampaniaName.trim()].sort((a, b) => (a || '').localeCompare(b || ''));
+      const newList = [...campaniasList, newCampaniaName.trim()].sort((a, b) => a.localeCompare(b));
       setCampaniasList(newList);
       setNewCampaniaName('');
       syncConfigToCloud({ campanias: newList });
@@ -468,7 +489,7 @@ function MainApp() {
   };
 
   const extractDynamicOptions = (leadsData) => {
-    if (!leadsData || leadsData.length === 0) return;
+    if (!leadsData || !Array.isArray(leadsData) || leadsData.length === 0) return;
     let newAsesores = [...asesoresList]; 
     let newLineas = new Set(lineasList);
     let newAcciones = new Set(accionesList);
@@ -476,23 +497,23 @@ function MainApp() {
     let newCampanias = new Set(campaniasList);
 
     leadsData.forEach(lead => {
-      if (lead.asesor && lead.asesor.trim() !== '') {
+      if (lead.asesor && typeof lead.asesor === 'string' && lead.asesor.trim() !== '') {
         const asesorNombre = lead.asesor.trim();
         if (!newAsesores.some(a => a?.nombre === asesorNombre)) {
           newAsesores.push({ nombre: asesorNombre, correo: '' });
         }
       }
-      if (lead.linea_interes && lead.linea_interes.trim() !== '') newLineas.add(lead.linea_interes.trim());
-      if (lead.accion && lead.accion.trim() !== '') newAcciones.add(lead.accion.trim());
-      if (lead.fuente_medio && lead.fuente_medio.trim() !== '') newFuentes.add(lead.fuente_medio.trim().toUpperCase());
-      if (lead.campania && lead.campania.trim() !== '') newCampanias.add(lead.campania.trim());
+      if (lead.linea_interes && typeof lead.linea_interes === 'string' && lead.linea_interes.trim() !== '') newLineas.add(lead.linea_interes.trim());
+      if (lead.accion && typeof lead.accion === 'string' && lead.accion.trim() !== '') newAcciones.add(lead.accion.trim());
+      if (lead.fuente_medio && typeof lead.fuente_medio === 'string' && lead.fuente_medio.trim() !== '') newFuentes.add(lead.fuente_medio.trim().toUpperCase());
+      if (lead.campania && typeof lead.campania === 'string' && lead.campania.trim() !== '') newCampanias.add(lead.campania.trim());
     });
 
     if (newAsesores.length !== asesoresList.length) setAsesoresList(newAsesores.sort((a, b) => (a?.nombre || '').localeCompare(b?.nombre || '')));
-    if (newLineas.size !== lineasList.length) setLineasList(Array.from(newLineas).sort((a, b) => (a || '').localeCompare(b || '')));
-    if (newAcciones.size !== accionesList.length) setAccionesList(Array.from(newAcciones).sort((a, b) => (a || '').localeCompare(b || '')));
-    if (newFuentes.size !== fuentesList.length) setFuentesList(Array.from(newFuentes).sort((a, b) => (a || '').localeCompare(b || '')));
-    if (newCampanias.size !== campaniasList.length) setCampaniasList(Array.from(newCampanias).sort((a, b) => (a || '').localeCompare(b || '')));
+    if (newLineas.size !== lineasList.length) setLineasList(Array.from(newLineas).sort((a, b) => a.localeCompare(b)));
+    if (newAcciones.size !== accionesList.length) setAccionesList(Array.from(newAcciones).sort((a, b) => a.localeCompare(b)));
+    if (newFuentes.size !== fuentesList.length) setFuentesList(Array.from(newFuentes).sort((a, b) => a.localeCompare(b)));
+    if (newCampanias.size !== campaniasList.length) setCampaniasList(Array.from(newCampanias).sort((a, b) => a.localeCompare(b)));
   };
 
   useEffect(() => {
@@ -571,38 +592,43 @@ function MainApp() {
 
   const mapItemToFormData = (item) => {
     const extractValue = (field) => {
-      if (field && typeof field === 'object' && field.Value !== undefined) return field.Value;
-      return field;
+      if (field === null || field === undefined) return '';
+      if (typeof field === 'object') {
+        if (field.Value !== undefined) return String(field.Value);
+        if (field.Title !== undefined) return String(field.Title);
+        return ''; 
+      }
+      return String(field);
     };
 
     return {
       id: item.ID || item.Id || item.id || item.ItemInternalId || '',
-      titulo: item.Title || item.titulo || item.TITULO || '',
+      titulo: extractValue(item.Title || item.titulo || item.TITULO),
       fecha_ingreso: formatDateTime(item.FECHA_INGRESO || item.fecha_ingreso),
       fecha_control: formatDateTime(item.FECHA_CONTROL || item.fecha_control),
       tiempo_respuesta_hrs: String(item.TIEMPO_RESPUESTA_HRS ?? item.tiempo_respuesta_hrs ?? ''),
-      novedad_tiempo: extractValue(item.NOVEDAD_TIEMPO || item.novedad_tiempo) || '',
-      fuente_medio: extractValue(item.FUENTE_MEDIO || item.fuente_medio) || '',
-      campania: extractValue(item.CAMPANIA || item.campania) || '',
-      celular: String(item.CELULAR || item.celular || ''),
-      email: item.EMAIL || item.email || '',
-      linea_interes: extractValue(item.LINEA_INTERES || item.LINEAS_INTERES || item.linea_interes) || '',
+      novedad_tiempo: extractValue(item.NOVEDAD_TIEMPO || item.novedad_tiempo),
+      fuente_medio: extractValue(item.FUENTE_MEDIO || item.fuente_medio),
+      campania: extractValue(item.CAMPANIA || item.campania),
+      celular: extractValue(item.CELULAR || item.celular),
+      email: extractValue(item.EMAIL || item.email),
+      linea_interes: extractValue(item.LINEA_INTERES || item.LINEAS_INTERES || item.linea_interes),
       estado: extractValue(item.ESTADO || item.estado) || 'Nuevo',
-      asesor: extractValue(item.ASESOR || item.asesor) || '',
+      asesor: extractValue(item.ASESOR || item.asesor),
       calificacion_lead: extractValue(item.CALIFICACION_LEAD || item.calificacion_lead) || 'Por evaluar',
-      razon_calificacion: item.RAZON_CALIFICACION || item.razon_calificacion || '',
-      notas_seguimiento: item.NOTAS_SEGUIMIENTO || item.notas_seguimiento || '',
+      razon_calificacion: extractValue(item.RAZON_CALIFICACION || item.razon_calificacion),
+      notas_seguimiento: extractValue(item.NOTAS_SEGUIMIENTO || item.notas_seguimiento),
       fecha_actualizacion_nota: formatDate(item.FECHA_ACTUALIZACION_NOTA || item.fecha_actualizacion_nota),
       fecha_seguimiento_dia: formatDate(item.FECHA_SEGUIMIENTO_DIA || item.fecha_seguimiento_dia),
-      jornada_seguimiento: extractValue(item.JORNADA_SEGUIMIENTO || item.jornada_seguimiento) || '',
+      jornada_seguimiento: extractValue(item.JORNADA_SEGUIMIENTO || item.jornada_seguimiento),
       hora_seguimiento: formatTime(item.HORA_SEGUIMIENTO || item.hora_seguimiento),
-      accion: extractValue(item.ACCION || item.accion) || '',
+      accion: extractValue(item.ACCION || item.accion),
       estado_orden: extractValue(item.ESTADO_ORDEN || item.estado_orden) || 'Abierta',
       fecha_cierre: formatDateTime(item.FECHA_CIERRE || item.fecha_cierre),
-      observaciones: item.OBSERVACIONES || item.observaciones || '',
-      programar_recordatorio: item.PROGRAMAR_RECORDATORIO === "True" || item.PROGRAMAR_RECORDATORIO === true || item.programar_recordatorio === true || String(item.PROGRAMAR_RECORDATORIO).toLowerCase() === 'true',
+      observaciones: extractValue(item.OBSERVACIONES || item.observaciones),
+      programar_recordatorio: String(item.PROGRAMAR_RECORDATORIO).toLowerCase() === 'true',
       canal_recordatorio: extractValue(item.CANAL_RECORDATORIO || item.canal_recordatorio) || 'email',
-      link_adjuntos: item.LINK_ADJUNTOS || item.link_adjuntos || item['{Link}'] || ''
+      link_adjuntos: extractValue(item.LINK_ADJUNTOS || item.link_adjuntos || item['{Link}'])
     };
   };
 
@@ -830,27 +856,32 @@ function MainApp() {
           }
 
           const extractValue = (field) => {
-            if (field && typeof field === 'object' && field.Value !== undefined) return field.Value;
-            return field;
+            if (field === null || field === undefined) return '';
+            if (typeof field === 'object') {
+              if (field.Value !== undefined) return String(field.Value);
+              if (field.Title !== undefined) return String(field.Title);
+              return ''; 
+            }
+            return String(field);
           };
 
           const mappedLeads = rawLeads.map(item => ({
             id: item.ID || item.Id || item.id || item.ItemInternalId || '',
-            titulo: item.Title || item.titulo || item.TITULO || '',
+            titulo: extractValue(item.Title || item.titulo || item.TITULO),
             fecha_ingreso: item.FECHA_INGRESO || item.fecha_ingreso || '',
             tiempo_respuesta_hrs: String(item.TIEMPO_RESPUESTA_HRS || item.tiempo_respuesta_hrs || ''),
-            fuente_medio: extractValue(item.FUENTE_MEDIO || item.fuente_medio) || '',
-            campania: extractValue(item.CAMPANIA || item.campania) || '',
-            celular: String(item.CELULAR || item.celular || ''),
-            email: item.EMAIL || item.email || '',
-            linea_interes: extractValue(item.LINEA_INTERES || item.LINEAS_INTERES || item.linea_interes) || '',
+            fuente_medio: extractValue(item.FUENTE_MEDIO || item.fuente_medio),
+            campania: extractValue(item.CAMPANIA || item.campania),
+            celular: extractValue(item.CELULAR || item.celular),
+            email: extractValue(item.EMAIL || item.email),
+            linea_interes: extractValue(item.LINEA_INTERES || item.LINEAS_INTERES || item.linea_interes),
             estado: extractValue(item.ESTADO || item.estado) || 'Nuevo',
-            asesor: extractValue(item.ASESOR || item.asesor) || '',
+            asesor: extractValue(item.ASESOR || item.asesor),
             calificacion_lead: extractValue(item.CALIFICACION_LEAD || item.calificacion_lead) || 'Por evaluar',
-            notas_seguimiento: item.NOTAS_SEGUIMIENTO || item.notas_seguimiento || '',
-            accion: extractValue(item.ACCION || item.accion) || '',
+            notas_seguimiento: extractValue(item.NOTAS_SEGUIMIENTO || item.notas_seguimiento),
+            accion: extractValue(item.ACCION || item.accion),
             estado_orden: extractValue(item.ESTADO_ORDEN || item.estado_orden) || 'Abierta',
-            link_adjuntos: item.LINK_ADJUNTOS || item.link_adjuntos || item['{Link}'] || ''
+            link_adjuntos: extractValue(item.LINK_ADJUNTOS || item.link_adjuntos || item['{Link}'])
           }));
 
           setSavedLeads(mappedLeads);
@@ -1054,8 +1085,8 @@ function MainApp() {
             <label className="block text-xs font-bold text-zinc-600 mb-2">Fuente / Medio</label>
             <select name="fuente_medio" value={formData.fuente_medio} onChange={handleChange} className="w-full rounded-sm border-zinc-300 border p-3 text-sm focus:ring-1 focus:ring-black focus:border-black outline-none bg-zinc-50 focus:bg-white transition-colors cursor-pointer">
               <option value="">Seleccione...</option>
-              {fuentesList.map(fuente => (
-                <option key={fuente} value={fuente}>{fuente}</option>
+              {fuentesList.map((fuente, i) => (
+                <option key={`fuente-${i}`} value={fuente}>{fuente}</option>
               ))}
             </select>
           </div>
@@ -1063,8 +1094,8 @@ function MainApp() {
             <label className="block text-xs font-bold text-zinc-600 mb-2">Campaña</label>
             <select name="campania" value={formData.campania} onChange={handleChange} className="w-full rounded-sm border-zinc-300 border p-3 text-sm focus:ring-1 focus:ring-black focus:border-black outline-none bg-zinc-50 focus:bg-white transition-colors cursor-pointer">
               <option value="">Seleccione...</option>
-              {campaniasList.map(campania => (
-                <option key={campania} value={campania}>{campania}</option>
+              {campaniasList.map((campania, i) => (
+                <option key={`campania-${i}`} value={campania}>{campania}</option>
               ))}
             </select>
           </div>
@@ -1072,8 +1103,8 @@ function MainApp() {
             <label className="block text-xs font-bold text-zinc-600 mb-2">Línea de Interés</label>
             <select name="linea_interes" value={formData.linea_interes} onChange={handleChange} className="w-full rounded-sm border-zinc-300 border p-3 text-sm focus:ring-1 focus:ring-black focus:border-black outline-none bg-zinc-50 focus:bg-white transition-colors cursor-pointer">
               <option value="">No especificada</option>
-              {lineasList.map(linea => (
-                <option key={linea} value={linea}>{linea}</option>
+              {lineasList.map((linea, i) => (
+                <option key={`linea-${i}`} value={linea}>{linea}</option>
               ))}
             </select>
           </div>
@@ -1115,7 +1146,9 @@ function MainApp() {
             <label className="block text-xs font-bold text-zinc-600 mb-2">Asesor Asignado</label>
             <select name="asesor" value={formData.asesor} onChange={handleChange} className="w-full rounded-sm border-zinc-300 border p-3 text-sm focus:ring-1 focus:ring-black focus:border-black outline-none bg-zinc-50 focus:bg-white transition-colors cursor-pointer">
               <option value="">Seleccionar...</option>
-              {asesoresList.map(asesor => <option key={asesor.nombre} value={asesor.nombre}>{asesor.nombre}</option>)}
+              {asesoresList.map((asesor, i) => (
+                <option key={`asesor-${i}`} value={asesor.nombre}>{asesor.nombre}</option>
+              ))}
             </select>
           </div>
         </div>
@@ -1215,8 +1248,8 @@ function MainApp() {
             <label className="block text-xs font-bold text-zinc-600 mb-2">Acción Requerida</label>
             <select name="accion" value={formData.accion} onChange={handleChange} className="w-full rounded-sm border-zinc-300 border p-3 text-sm focus:ring-1 focus:ring-black focus:border-black outline-none bg-zinc-50 focus:bg-white transition-colors cursor-pointer">
               <option value="">Seleccione...</option>
-              {accionesList.map(accion => (
-                <option key={accion} value={accion}>{accion}</option>
+              {accionesList.map((accion, i) => (
+                <option key={`accion-${i}`} value={accion}>{accion}</option>
               ))}
             </select>
           </div>
@@ -1432,17 +1465,17 @@ function MainApp() {
 
                 <select value={filterFuente} onChange={e => setFilterFuente(e.target.value)} className="p-2.5 text-xs font-medium border border-zinc-300 rounded-sm focus:border-black outline-none cursor-pointer bg-white">
                   <option value="">Todas las fuentes</option>
-                  {fuentesList.map(f => <option key={f} value={f}>{f}</option>)}
+                  {fuentesList.map((f, i) => <option key={`filtro-fuente-${i}`} value={f}>{f}</option>)}
                 </select>
 
                 <select value={filterCampania} onChange={e => setFilterCampania(e.target.value)} className="p-2.5 text-xs font-medium border border-zinc-300 rounded-sm focus:border-black outline-none cursor-pointer bg-white">
                   <option value="">Todas las campañas</option>
-                  {campaniasList.map(c => <option key={c} value={c}>{c}</option>)}
+                  {campaniasList.map((c, i) => <option key={`filtro-camp-${i}`} value={c}>{c}</option>)}
                 </select>
 
                 <select value={filterAsesor} onChange={e => setFilterAsesor(e.target.value)} className="p-2.5 text-xs font-medium border border-zinc-300 rounded-sm focus:border-black outline-none cursor-pointer bg-white">
                   <option value="">Todos los asesores</option>
-                  {asesoresList.map(a => <option key={a.nombre} value={a.nombre}>{a.nombre}</option>)}
+                  {asesoresList.map((a, i) => <option key={`filtro-ase-${i}`} value={a.nombre}>{a.nombre}</option>)}
                 </select>
                 <select value={filterEstado} onChange={e => setFilterEstado(e.target.value)} className="p-2.5 text-xs font-medium border border-zinc-300 rounded-sm focus:border-black outline-none cursor-pointer bg-white">
                   <option value="">Todos los estados</option>
@@ -1515,7 +1548,7 @@ function MainApp() {
                     </tr>
                   ) : (
                     filteredAndSortedLeads.map((lead, index) => (
-                      <tr key={lead.id || index} className="hover:bg-zinc-50 transition-colors group text-sm text-zinc-700">
+                      <tr key={`lead-${lead.id || index}`} className="hover:bg-zinc-50 transition-colors group text-sm text-zinc-700">
                         <td className="p-4 font-black text-indigo-600 text-center">#{lead.id}</td>
                         <td className="p-4 font-bold text-black">{lead.titulo || '-'}</td>
                         <td className="p-4">{lead.fecha_ingreso ? new Date(lead.fecha_ingreso).toLocaleString([],{dateStyle:'short', timeStyle:'short'}) : '-'}</td>
@@ -1857,10 +1890,10 @@ function MainApp() {
                   <div className="bg-white p-6 rounded-sm shadow-sm border border-zinc-200">
                     <h3 className="text-sm font-bold text-black uppercase tracking-wide mb-6 border-b border-zinc-100 pb-3">Embudo de Acciones</h3>
                     <div className="space-y-5 max-h-[220px] overflow-y-auto pr-2 custom-scrollbar">
-                      {Object.entries(reportes.accionesCount).sort((a,b) => b[1] - a[1]).map(([accion, count]) => {
+                      {Object.entries(reportes.accionesCount).sort((a,b) => b[1] - a[1]).map(([accion, count], i) => {
                         const percent = reportes.total > 0 ? (count / reportes.total) * 100 : 0;
                         return (
-                          <div key={accion} className="group">
+                          <div key={`rep-accion-${i}`} className="group">
                             <div className="flex justify-between text-xs font-bold mb-1.5">
                               <span className="text-zinc-700">{accion}</span>
                               <span className="text-black">{count} <span className="text-zinc-400 text-[10px]">({percent.toFixed(0)}%)</span></span>
@@ -1878,10 +1911,10 @@ function MainApp() {
                   <div className="bg-white p-6 rounded-sm shadow-sm border border-zinc-200">
                     <h3 className="text-sm font-bold text-black uppercase tracking-wide mb-6 border-b border-zinc-100 pb-3">Líneas de Interés Solicitadas</h3>
                     <div className="space-y-5 max-h-[220px] overflow-y-auto pr-2 custom-scrollbar">
-                      {Object.entries(reportes.lineasCount).sort((a,b) => b[1] - a[1]).map(([linea, count]) => {
+                      {Object.entries(reportes.lineasCount).sort((a,b) => b[1] - a[1]).map(([linea, count], i) => {
                         const percent = reportes.total > 0 ? (count / reportes.total) * 100 : 0;
                         return (
-                          <div key={linea} className="group">
+                          <div key={`rep-linea-${i}`} className="group">
                             <div className="flex justify-between text-xs font-bold mb-1.5">
                               <span className="text-zinc-700">{linea}</span>
                               <span className="text-black">{count} <span className="text-zinc-400 text-[10px]">({percent.toFixed(0)}%)</span></span>
@@ -1915,7 +1948,7 @@ function MainApp() {
                   ) : (
                      <div className="space-y-2">
                         {appLogs.map((log, i) => (
-                           <div key={i} className="flex gap-4 border-b border-zinc-800 pb-2">
+                           <div key={`log-${i}`} className="flex gap-4 border-b border-zinc-800 pb-2">
                               <span className="text-zinc-500 shrink-0">[{log.time}]</span>
                               <span className={`shrink-0 font-bold ${log.type === 'error' ? 'text-red-400' : log.type === 'success' ? 'text-emerald-400' : log.type === 'warning' ? 'text-amber-400' : 'text-blue-300'}`}>
                                  {log.type.toUpperCase().padEnd(7)}
