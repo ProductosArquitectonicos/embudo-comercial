@@ -233,8 +233,7 @@ function MainApp() {
   const [reportFilterCalificacion, setReportFilterCalificacion] = useState(''); 
   const [sortConfig, setSortConfig] = useState({ key: 'id', direction: 'descending' });
 
-  // --- FILTROS DE SEGURIDAD PARA LISTAS CORRUPTAS ---
-  const getInitialStringList = (key, defaultList) => {
+  const getInitialList = (key, defaultList) => {
     try {
       const savedList = localStorage.getItem(key);
       if (!savedList) return defaultList;
@@ -280,10 +279,10 @@ function MainApp() {
   };
   
   const [asesoresList, setAsesoresList] = useState(getInitialAsesoresList);
-  const [lineasList, setLineasList] = useState(() => getInitialStringList('lineasList', []));
-  const [accionesList, setAccionesList] = useState(() => getInitialStringList('accionesList', []));
-  const [fuentesList, setFuentesList] = useState(() => getInitialStringList('fuentesList', []));
-  const [campaniasList, setCampaniasList] = useState(() => getInitialStringList('campaniasList', []));
+  const [lineasList, setLineasList] = useState(() => getInitialList('lineasList', []));
+  const [accionesList, setAccionesList] = useState(() => getInitialList('accionesList', []));
+  const [fuentesList, setFuentesList] = useState(() => getInitialList('fuentesList', []));
+  const [campaniasList, setCampaniasList] = useState(() => getInitialList('campaniasList', []));
   
   const [showAdminModal, setShowAdminModal] = useState(false);
   const [adminTab, setAdminTab] = useState('asesores'); 
@@ -339,11 +338,11 @@ function MainApp() {
         nombre, correo: correosAsesores[i] || '' 
       }));
 
-      if(extractedAsesores.length > 0) setAsesoresList(extractedAsesores.sort((a, b) => a.nombre.localeCompare(b.nombre)));
-      if(configData.LINEAS_INTERES) setLineasList(parseSemicolonString(configData.LINEAS_INTERES).sort((a, b) => a.localeCompare(b)));
-      if(configData.ACCIONES) setAccionesList(parseSemicolonString(configData.ACCIONES).sort((a, b) => a.localeCompare(b)));
-      if(configData.FUENTES) setFuentesList(parseSemicolonString(configData.FUENTES).sort((a, b) => a.localeCompare(b)));
-      if(configData.CAMPANIAS) setCampaniasList(parseSemicolonString(configData.CAMPANIAS).sort((a, b) => a.localeCompare(b)));
+      if(extractedAsesores.length > 0) setAsesoresList(extractedAsesores.sort((a, b) => (a?.nombre || '').localeCompare(b?.nombre || '')));
+      if(configData.LINEAS_INTERES) setLineasList(parseSemicolonString(configData.LINEAS_INTERES).sort((a, b) => (a || '').localeCompare(b || '')));
+      if(configData.ACCIONES) setAccionesList(parseSemicolonString(configData.ACCIONES).sort((a, b) => (a || '').localeCompare(b || '')));
+      if(configData.FUENTES) setFuentesList(parseSemicolonString(configData.FUENTES).sort((a, b) => (a || '').localeCompare(b || '')));
+      if(configData.CAMPANIAS) setCampaniasList(parseSemicolonString(configData.CAMPANIAS).sort((a, b) => (a || '').localeCompare(b || '')));
 
       addLog('Configuración sincronizada desde la Nube.', 'success');
     } catch (error) {
@@ -407,7 +406,7 @@ function MainApp() {
   const handleAddAsesor = () => {
     const trimmedName = newAsesorName.trim();
     if (trimmedName && !asesoresList.some(a => a.nombre === trimmedName)) {
-      const newList = [...asesoresList, { nombre: trimmedName, correo: newAsesorEmail.trim() }].sort((a, b) => a.nombre.localeCompare(b.nombre));
+      const newList = [...asesoresList, { nombre: trimmedName, correo: newAsesorEmail.trim() }].sort((a, b) => (a?.nombre || '').localeCompare(b?.nombre || ''));
       setAsesoresList(newList);
       setNewAsesorName('');
       setNewAsesorEmail('');
@@ -426,7 +425,7 @@ function MainApp() {
 
   const handleAddLinea = () => {
     if (newLineaName.trim() && !lineasList.includes(newLineaName.trim())) {
-      const newList = [...lineasList, newLineaName.trim()].sort((a, b) => a.localeCompare(b));
+      const newList = [...lineasList, newLineaName.trim()].sort((a, b) => (a || '').localeCompare(b || ''));
       setLineasList(newList);
       setNewLineaName('');
       syncConfigToCloud({ lineas: newList });
@@ -442,7 +441,7 @@ function MainApp() {
 
   const handleAddAccion = () => {
     if (newAccionName.trim() && !accionesList.includes(newAccionName.trim())) {
-      const newList = [...accionesList, newAccionName.trim()].sort((a, b) => a.localeCompare(b));
+      const newList = [...accionesList, newAccionName.trim()].sort((a, b) => (a || '').localeCompare(b || ''));
       setAccionesList(newList);
       setNewAccionName('');
       syncConfigToCloud({ acciones: newList });
@@ -458,7 +457,7 @@ function MainApp() {
 
   const handleAddFuente = () => {
     if (newFuenteName.trim() && !fuentesList.includes(newFuenteName.trim().toUpperCase())) {
-      const newList = [...fuentesList, newFuenteName.trim().toUpperCase()].sort((a, b) => a.localeCompare(b));
+      const newList = [...fuentesList, newFuenteName.trim().toUpperCase()].sort((a, b) => (a || '').localeCompare(b || ''));
       setFuentesList(newList);
       setNewFuenteName('');
       syncConfigToCloud({ fuentes: newList });
@@ -474,7 +473,7 @@ function MainApp() {
 
   const handleAddCampania = () => {
     if (newCampaniaName.trim() && !campaniasList.includes(newCampaniaName.trim())) {
-      const newList = [...campaniasList, newCampaniaName.trim()].sort((a, b) => a.localeCompare(b));
+      const newList = [...campaniasList, newCampaniaName.trim()].sort((a, b) => (a || '').localeCompare(b || ''));
       setCampaniasList(newList);
       setNewCampaniaName('');
       syncConfigToCloud({ campanias: newList });
@@ -510,10 +509,10 @@ function MainApp() {
     });
 
     if (newAsesores.length !== asesoresList.length) setAsesoresList(newAsesores.sort((a, b) => (a?.nombre || '').localeCompare(b?.nombre || '')));
-    if (newLineas.size !== lineasList.length) setLineasList(Array.from(newLineas).sort((a, b) => a.localeCompare(b)));
-    if (newAcciones.size !== accionesList.length) setAccionesList(Array.from(newAcciones).sort((a, b) => a.localeCompare(b)));
-    if (newFuentes.size !== fuentesList.length) setFuentesList(Array.from(newFuentes).sort((a, b) => a.localeCompare(b)));
-    if (newCampanias.size !== campaniasList.length) setCampaniasList(Array.from(newCampanias).sort((a, b) => a.localeCompare(b)));
+    if (newLineas.size !== lineasList.length) setLineasList(Array.from(newLineas).sort((a, b) => (a || '').localeCompare(b || '')));
+    if (newAcciones.size !== accionesList.length) setAccionesList(Array.from(newAcciones).sort((a, b) => (a || '').localeCompare(b || '')));
+    if (newFuentes.size !== fuentesList.length) setFuentesList(Array.from(newFuentes).sort((a, b) => (a || '').localeCompare(b || '')));
+    if (newCampanias.size !== campaniasList.length) setCampaniasList(Array.from(newCampanias).sort((a, b) => (a || '').localeCompare(b || '')));
   };
 
   useEffect(() => {
@@ -1890,10 +1889,10 @@ function MainApp() {
                   <div className="bg-white p-6 rounded-sm shadow-sm border border-zinc-200">
                     <h3 className="text-sm font-bold text-black uppercase tracking-wide mb-6 border-b border-zinc-100 pb-3">Embudo de Acciones</h3>
                     <div className="space-y-5 max-h-[220px] overflow-y-auto pr-2 custom-scrollbar">
-                      {Object.entries(reportes.accionesCount).sort((a,b) => b[1] - a[1]).map(([accion, count], i) => {
+                      {Object.entries(reportes.accionesCount).sort((a,b) => b[1] - a[1]).map(([accion, count]) => {
                         const percent = reportes.total > 0 ? (count / reportes.total) * 100 : 0;
                         return (
-                          <div key={`rep-accion-${i}`} className="group">
+                          <div key={accion} className="group">
                             <div className="flex justify-between text-xs font-bold mb-1.5">
                               <span className="text-zinc-700">{accion}</span>
                               <span className="text-black">{count} <span className="text-zinc-400 text-[10px]">({percent.toFixed(0)}%)</span></span>
@@ -1911,10 +1910,10 @@ function MainApp() {
                   <div className="bg-white p-6 rounded-sm shadow-sm border border-zinc-200">
                     <h3 className="text-sm font-bold text-black uppercase tracking-wide mb-6 border-b border-zinc-100 pb-3">Líneas de Interés Solicitadas</h3>
                     <div className="space-y-5 max-h-[220px] overflow-y-auto pr-2 custom-scrollbar">
-                      {Object.entries(reportes.lineasCount).sort((a,b) => b[1] - a[1]).map(([linea, count], i) => {
+                      {Object.entries(reportes.lineasCount).sort((a,b) => b[1] - a[1]).map(([linea, count]) => {
                         const percent = reportes.total > 0 ? (count / reportes.total) * 100 : 0;
                         return (
-                          <div key={`rep-linea-${i}`} className="group">
+                          <div key={linea} className="group">
                             <div className="flex justify-between text-xs font-bold mb-1.5">
                               <span className="text-zinc-700">{linea}</span>
                               <span className="text-black">{count} <span className="text-zinc-400 text-[10px]">({percent.toFixed(0)}%)</span></span>
@@ -1962,6 +1961,190 @@ function MainApp() {
             </div>
           </div>
         )}
+
+        {showAdminModal && (
+          <div className="fixed inset-0 bg-zinc-900/60 backdrop-blur-sm flex items-center justify-center z-[60] p-4">
+            <div className="bg-white rounded-sm w-full max-w-xl shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200 border border-zinc-200 flex flex-col max-h-[85vh]">
+              
+              <div className="flex border-b border-zinc-200 bg-zinc-50 relative">
+                <div className="flex flex-1 overflow-x-auto custom-scrollbar">
+                  <button 
+                    onClick={() => setAdminTab('asesores')}
+                    className={`whitespace-nowrap flex-1 p-4 text-xs font-bold border-b-2 transition-colors ${adminTab === 'asesores' ? 'border-black text-black bg-white' : 'border-transparent text-zinc-400 hover:text-black'}`}
+                  >
+                    Asesores
+                  </button>
+                  <button 
+                    onClick={() => setAdminTab('lineas')}
+                    className={`whitespace-nowrap flex-1 p-4 text-xs font-bold border-b-2 transition-colors ${adminTab === 'lineas' ? 'border-black text-black bg-white' : 'border-transparent text-zinc-400 hover:text-black'}`}
+                  >
+                    Líneas de Interés
+                  </button>
+                  <button 
+                    onClick={() => setAdminTab('acciones')}
+                    className={`whitespace-nowrap flex-1 p-4 text-xs font-bold border-b-2 transition-colors ${adminTab === 'acciones' ? 'border-black text-black bg-white' : 'border-transparent text-zinc-400 hover:text-black'}`}
+                  >
+                    Acciones
+                  </button>
+                  <button 
+                    onClick={() => setAdminTab('fuentes')}
+                    className={`whitespace-nowrap flex-1 p-4 text-xs font-bold border-b-2 transition-colors ${adminTab === 'fuentes' ? 'border-black text-black bg-white' : 'border-transparent text-zinc-400 hover:text-black'}`}
+                  >
+                    Fuentes
+                  </button>
+                  <button 
+                    onClick={() => setAdminTab('campanias')}
+                    className={`whitespace-nowrap flex-1 p-4 text-xs font-bold border-b-2 transition-colors ${adminTab === 'campanias' ? 'border-black text-black bg-white' : 'border-transparent text-zinc-400 hover:text-black'}`}
+                  >
+                    Campañas
+                  </button>
+                </div>
+                
+                <button 
+                  onClick={() => setShowAdminModal(false)} 
+                  className="p-4 text-zinc-500 hover:text-black transition-colors bg-white border-l border-zinc-200 shrink-0 z-10 drop-shadow-sm"
+                  title="Cerrar (ESC)"
+                >
+                  <X size={18} />
+                </button>
+              </div>
+              
+              <div className="p-7 overflow-y-auto flex-1 custom-scrollbar">
+                {adminTab === 'asesores' && (
+                  <div className="animate-in fade-in">
+                    <div className="flex flex-col gap-3 mb-6 bg-zinc-50 p-4 border border-zinc-200 rounded-sm">
+                      <div className="flex flex-col sm:flex-row gap-3">
+                        <input 
+                          type="text" value={newAsesorName} onChange={(e) => setNewAsesorName(e.target.value)}
+                          placeholder="Nombre del asesor..."
+                          className="flex-1 rounded-sm border-zinc-300 border p-3 text-sm focus:ring-1 focus:ring-black focus:border-black outline-none bg-white"
+                        />
+                        <input 
+                          type="email" value={newAsesorEmail} onChange={(e) => setNewAsesorEmail(e.target.value)}
+                          onKeyDown={(e) => e.key === 'Enter' && handleAddAsesor()}
+                          placeholder="Correo del asesor..."
+                          className="flex-1 rounded-sm border-zinc-300 border p-3 text-sm focus:ring-1 focus:ring-black focus:border-black outline-none bg-white"
+                        />
+                        <button onClick={handleAddAsesor} disabled={!newAsesorName.trim()} className="bg-black hover:bg-zinc-800 disabled:bg-zinc-300 text-white px-5 py-3 rounded-sm font-bold text-sm transition-colors flex items-center justify-center gap-2 sm:w-auto w-full">
+                          <UserPlus size={16} /> Agregar
+                        </button>
+                      </div>
+                    </div>
+                    <div className="space-y-2 pr-2">
+                      {asesoresList.map(asesor => (
+                        <div key={asesor.nombre} className="flex items-center justify-between bg-white border border-zinc-200 p-3.5 rounded-sm hover:border-black transition-colors">
+                          <div className="flex flex-col">
+                            <span className="text-sm font-bold text-black">{asesor.nombre}</span>
+                            {asesor.correo && <span className="text-xs text-zinc-500 font-mono mt-0.5">{asesor.correo}</span>}
+                          </div>
+                          <button onClick={() => handleRemoveAsesor(asesor.nombre)} className="text-zinc-400 hover:text-red-600 transition-colors"><Trash2 size={16} /></button>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {adminTab === 'lineas' && (
+                  <div className="animate-in fade-in">
+                    <div className="flex gap-3 mb-6">
+                      <input 
+                        type="text" value={newLineaName} onChange={(e) => setNewLineaName(e.target.value)}
+                        onKeyDown={(e) => e.key === 'Enter' && handleAddLinea()}
+                        placeholder="Nueva línea de interés..."
+                        className="flex-1 rounded-sm border-zinc-300 border p-3 text-sm focus:ring-1 focus:ring-black focus:border-black outline-none bg-zinc-50 focus:bg-white"
+                      />
+                      <button onClick={handleAddLinea} disabled={!newLineaName.trim()} className="bg-black hover:bg-zinc-800 disabled:bg-zinc-300 text-white px-5 py-3 rounded-sm font-bold text-sm transition-colors flex items-center gap-2">
+                        <Layers size={16} /> Agregar
+                      </button>
+                    </div>
+                    <div className="space-y-2 pr-2">
+                      {lineasList.map(linea => (
+                        <div key={linea} className="flex items-center justify-between bg-white border border-zinc-200 p-3.5 rounded-sm hover:border-black transition-colors">
+                          <span className="text-sm font-bold text-black">{linea}</span>
+                          <button onClick={() => handleRemoveLinea(linea)} className="text-zinc-400 hover:text-red-600 transition-colors"><Trash2 size={16} /></button>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {adminTab === 'acciones' && (
+                  <div className="animate-in fade-in">
+                    <div className="flex gap-3 mb-6">
+                      <input 
+                        type="text" value={newAccionName} onChange={(e) => setNewAccionName(e.target.value)}
+                        onKeyDown={(e) => e.key === 'Enter' && handleAddAccion()}
+                        placeholder="Nueva acción requerida..."
+                        className="flex-1 rounded-sm border-zinc-300 border p-3 text-sm focus:ring-1 focus:ring-black focus:border-black outline-none bg-zinc-50 focus:bg-white"
+                      />
+                      <button onClick={handleAddAccion} disabled={!newAccionName.trim()} className="bg-black hover:bg-zinc-800 disabled:bg-zinc-300 text-white px-5 py-3 rounded-sm font-bold text-sm transition-colors flex items-center gap-2">
+                        <Activity size={16} /> Agregar
+                      </button>
+                    </div>
+                    <div className="space-y-2 pr-2">
+                      {accionesList.map(accion => (
+                        <div key={accion} className="flex items-center justify-between bg-white border border-zinc-200 p-3.5 rounded-sm hover:border-black transition-colors">
+                          <span className="text-sm font-bold text-black">{accion}</span>
+                          <button onClick={() => handleRemoveAccion(accion)} className="text-zinc-400 hover:text-red-600 transition-colors"><Trash2 size={16} /></button>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {adminTab === 'fuentes' && (
+                  <div className="animate-in fade-in">
+                    <div className="flex gap-3 mb-6">
+                      <input 
+                        type="text" value={newFuenteName} onChange={(e) => setNewFuenteName(e.target.value)}
+                        onKeyDown={(e) => e.key === 'Enter' && handleAddFuente()}
+                        placeholder="Nueva fuente (Ej. GOOGLE PAID)..."
+                        className="flex-1 rounded-sm border-zinc-300 border p-3 text-sm focus:ring-1 focus:ring-black focus:border-black outline-none bg-zinc-50 focus:bg-white"
+                      />
+                      <button onClick={handleAddFuente} disabled={!newFuenteName.trim()} className="bg-black hover:bg-zinc-800 disabled:bg-zinc-300 text-white px-5 py-3 rounded-sm font-bold text-sm transition-colors flex items-center gap-2">
+                        <Globe size={16} /> Agregar
+                      </button>
+                    </div>
+                    <div className="space-y-2 pr-2">
+                      {fuentesList.map(fuente => (
+                        <div key={fuente} className="flex items-center justify-between bg-white border border-zinc-200 p-3.5 rounded-sm hover:border-black transition-colors">
+                          <span className="text-sm font-bold text-black">{fuente}</span>
+                          <button onClick={() => handleRemoveFuente(fuente)} className="text-zinc-400 hover:text-red-600 transition-colors"><Trash2 size={16} /></button>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {adminTab === 'campanias' && (
+                  <div className="animate-in fade-in">
+                    <div className="flex gap-3 mb-6">
+                      <input 
+                        type="text" value={newCampaniaName} onChange={(e) => setNewCampaniaName(e.target.value)}
+                        onKeyDown={(e) => e.key === 'Enter' && handleAddCampania()}
+                        placeholder="Nueva campaña..."
+                        className="flex-1 rounded-sm border-zinc-300 border p-3 text-sm focus:ring-1 focus:ring-black focus:border-black outline-none bg-zinc-50 focus:bg-white"
+                      />
+                      <button onClick={handleAddCampania} disabled={!newCampaniaName.trim()} className="bg-black hover:bg-zinc-800 disabled:bg-zinc-300 text-white px-5 py-3 rounded-sm font-bold text-sm transition-colors flex items-center gap-2">
+                        <Megaphone size={16} /> Agregar
+                      </button>
+                    </div>
+                    <div className="space-y-2 pr-2">
+                      {campaniasList.map(campania => (
+                        <div key={campania} className="flex items-center justify-between bg-white border border-zinc-200 p-3.5 rounded-sm hover:border-black transition-colors">
+                          <span className="text-sm font-bold text-black">{campania}</span>
+                          <button onClick={() => handleRemoveCampania(campania)} className="text-zinc-400 hover:text-red-600 transition-colors"><Trash2 size={16} /></button>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+              </div>
+            </div>
+          </div>
+        )}
+
       </div>
     </div>
   );
