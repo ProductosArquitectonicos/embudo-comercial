@@ -5,11 +5,133 @@ import {
   Star, Bell, X, Settings, Trash2, UserPlus,
   TableProperties, FilePlus2, RefreshCw, Loader2, Database,
   BarChart3, Target, TrendingUp, CalendarX, Moon, Layers, Activity,
-  Search, Filter, ChevronUp, ChevronDown, Terminal, Edit2, Megaphone, Globe, ExternalLink, Link as LinkIcon, Download
+  Search, Filter, ChevronUp, ChevronDown, Terminal, Edit2, Megaphone, Globe, ExternalLink, Link as LinkIcon, Download,
+  LogIn, LogOut
 } from 'lucide-react';
 
-export default function App() {
-  // Estado inicial del formulario (Sin datos_adjuntos)
+// ============================================================================
+// 🚀 IMPORTS 
+// ============================================================================
+import { PublicClientApplication } from '@azure/msal-browser';
+import { MsalProvider, useMsal, useIsAuthenticated } from '@azure/msal-react';
+
+// ============================================================================
+// OBTENCIÓN SEGURA DE VARIABLES DE ENTORNO
+// ============================================================================
+const getEnvVar = (envName, fallback = "") => {
+  try {
+    if (typeof process !== 'undefined' && process.env && process.env[envName]) {
+      return process.env[envName];
+    }
+  } catch (error) { }
+  try {
+    if (typeof import.meta !== 'undefined' && import.meta.env && import.meta.env[envName]) {
+      return import.meta.env[envName];
+    }
+  } catch (error) { }
+  return fallback;
+};
+
+// Azure AD
+const AZURE_CLIENT_ID = getEnvVar('VITE_AZURE_CLIENT_ID', '');
+const AZURE_TENANT_ID = getEnvVar('VITE_AZURE_TENANT_ID', 'common');
+
+// Power Automate (Con URLs por defecto para la vista previa)
+const URL_DATOS_DEFAULT = "https://default2dad2f4230e64fe8adc416a2300053.14.environment.api.powerplatform.com:443/powerautomate/automations/direct/workflows/b4faf61d50994a6a83f7d1f28e3d8c78/triggers/manual/paths/invoke?api-version=1&sp=%2Ftriggers%2Fmanual%2Frun&sv=1.0&sig=7yYU2eVMAaTyWfdIsKdg_40bQIHfr9JWNg01200Ncz8";
+const URL_CONFIG_DEFAULT = "https://default2dad2f4230e64fe8adc416a2300053.14.environment.api.powerplatform.com:443/powerautomate/automations/direct/workflows/c3760089aa194bffab0b4997b56ed1d1/triggers/manual/paths/invoke?api-version=1&sp=%2Ftriggers%2Fmanual%2Frun&sv=1.0&sig=lfGu8reb8dGM-e1OCf5oXPW_QOwDFqw8X8YZ5b6p1zM";
+
+const URL_DATOS = getEnvVar('VITE_PoAu_URL_EMBUDOCOM_DATOS', URL_DATOS_DEFAULT);
+const URL_CONFIG = getEnvVar('VITE_PoAu_URL_EMBUDOCOM_CONFIG', URL_CONFIG_DEFAULT);
+
+// ============================================================================
+// CONFIGURACIÓN DE MICROSOFT AZURE AD (ENTRA ID)
+// ============================================================================
+const msalConfig = {
+  auth: {
+    clientId: AZURE_CLIENT_ID || "CLIENT_ID_NO_CONFIGURADO",
+    authority: `https://login.microsoftonline.com/${AZURE_TENANT_ID}`, 
+    redirectUri: typeof window !== "undefined" ? window.location.origin : "/",
+  },
+  cache: {
+    cacheLocation: "sessionStorage",
+    storeAuthStateInCookie: false,
+  }
+};
+
+const msalInstance = new PublicClientApplication(msalConfig);
+
+// ==========================================
+// ESQUEMA BASE VACÍO (PREVIENE ERROR 400 EN PA)
+// ==========================================
+const getBasePayload = () => ({
+  titulo: "", email: "", fecha_ingreso: "", fecha_control: "",
+  tiempo_respuesta_hrs: "", novedad_tiempo: "", fuente_medio: "", campania: "",
+  celular: "", linea_interes: "", estado: "", asesor: "", calificacion_lead: "",
+  razon_calificacion: "", notas_seguimiento: "", fecha_actualizacion_nota: "",
+  fecha_seguimiento_dia: "", jornada_seguimiento: "", hora_seguimiento: "",
+  accion: "", estado_orden: "", fecha_cierre: "", observaciones: "",
+  programar_recordatorio: false, canal_recordatorio: "", email_asesor: "",
+  fecha_registro_sistema: ""
+});
+
+// ==========================================
+// COMPONENTE DE LOGIN
+// ==========================================
+function PantallaLoginMS() {
+  const { instance } = useMsal();
+  const [isLoggingIn, setIsLoggingIn] = useState(false);
+
+  const handleLoginClick = () => {
+    setIsLoggingIn(true);
+    if (typeof instance.loginRedirect === 'function') {
+      instance.loginRedirect({ scopes: ["user.read"] }).catch(e => {
+        console.error(e);
+        setIsLoggingIn(false);
+      });
+    } else if (typeof instance.loginPopup === 'function') {
+      instance.loginPopup({ scopes: ["user.read"] }).catch(e => {
+        console.error(e);
+        setIsLoggingIn(false);
+      });
+    }
+  };
+
+  return (
+    <div className="min-h-screen bg-zinc-50 flex items-center justify-center p-4 relative overflow-hidden">
+      <div className="absolute top-[-10%] left-[-10%] w-96 h-96 bg-blue-400 rounded-full mix-blend-multiply filter blur-3xl opacity-20 animate-pulse"></div>
+      <div className="absolute bottom-[-10%] right-[-10%] w-96 h-96 bg-zinc-400 rounded-full mix-blend-multiply filter blur-3xl opacity-20"></div>
+
+      <div className="bg-white p-10 rounded-sm shadow-xl border border-zinc-200 max-w-md w-full text-center flex flex-col items-center z-10 animate-in zoom-in-95 duration-500">
+        <div className="w-20 h-20 mb-6 bg-black rounded-sm flex items-center justify-center shadow-md">
+          <span className="text-4xl font-black text-white tracking-tighter leading-none">pa</span>
+        </div>
+        <h1 className="text-2xl font-bold text-black mb-2">Embudo Comercial</h1>
+        <p className="text-zinc-500 text-sm mb-8 leading-relaxed font-medium">
+          Inicia sesión con tu cuenta corporativa de Microsoft para acceder a la gestión de leads.
+        </p>
+        <button 
+          onClick={handleLoginClick}
+          disabled={isLoggingIn}
+          className="w-full bg-[#00A4EF] hover:bg-[#008bc9] disabled:bg-zinc-400 text-white px-6 py-4 rounded-sm font-bold text-sm transition-all flex items-center justify-center gap-3 shadow-md"
+        >
+          {isLoggingIn ? <Loader2 size={18} className="animate-spin" /> : <LogIn size={18} />}
+          {isLoggingIn ? 'Conectando...' : 'Iniciar sesión con Microsoft'}
+        </button>
+        <p className="text-xs text-zinc-400 font-semibold mt-6 px-4">
+          El acceso está restringido al directorio activo corporativo (Azure AD).
+        </p>
+      </div>
+    </div>
+  );
+}
+
+// ==========================================
+// APLICACIÓN PRINCIPAL (PROTEGIDA)
+// ==========================================
+function MainApp() {
+  const { instance, accounts } = useMsal();
+  const currentUser = accounts[0] || {};
+
   const initialState = {
     id: '', 
     titulo: '', fecha_ingreso: '', fecha_control: '',
@@ -29,24 +151,22 @@ export default function App() {
   const [formData, setFormData] = useState(initialState);
   const [savedLeads, setSavedLeads] = useState([]);
   
-  // --- Estados de Alertas (Toast) ---
   const [toastAlert, setToastAlert] = useState({ show: false, message: '', type: 'success' }); 
   const [scheduledReminder, setScheduledReminder] = useState(null);
   const toastTimeoutRef = useRef(null); 
   
-  // Vistas y Cargas
   const [currentView, setCurrentView] = useState('form'); 
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isLoadingData, setIsLoadingData] = useState(false);
+  const [isFetchingDetails, setIsFetchingDetails] = useState(false);
+  
   const [isSyncingConfig, setIsSyncingConfig] = useState(false); 
   const [editingLeadId, setEditingLeadId] = useState(null); 
   const [showEditModal, setShowEditModal] = useState(false); 
 
-  // --- Estados para Eliminar Registro ---
   const [leadToDelete, setLeadToDelete] = useState(null);
   const [isDeleting, setIsDeleting] = useState(false);
 
-  // --- Logs del Sistema ---
   const [appLogs, setAppLogs] = useState([]);
   const [showLogsModal, setShowLogsModal] = useState(false);
 
@@ -57,7 +177,6 @@ export default function App() {
     });
   };
 
-  // Función robusta para mostrar el Toast (Alerta Flotante)
   const showToast = (message, type = 'success') => {
     setToastAlert({ show: true, message, type });
     if (toastTimeoutRef.current) clearTimeout(toastTimeoutRef.current);
@@ -68,11 +187,14 @@ export default function App() {
     }, 5000);
   };
 
+  const hasLoggedAuth = useRef(false);
   useEffect(() => {
-    addLog('Aplicación inicializada. Arquitectura Switch activada.', 'info');
-  }, []);
+    if (currentUser.name && !hasLoggedAuth.current) {
+      addLog(`Usuario autenticado: ${currentUser.name} (${currentUser.username || ''})`, 'success');
+      hasLoggedAuth.current = true;
+    }
+  }, [currentUser.name, currentUser.username]);
 
-  // --- Efecto global para cerrar modales con la tecla ESC ---
   useEffect(() => {
     const handleEscape = (e) => {
       if (e.key === 'Escape') {
@@ -89,7 +211,6 @@ export default function App() {
     return () => document.removeEventListener('keydown', handleEscape);
   }, [showEditModal, isSubmitting, leadToDelete, isDeleting]);
 
-  // --- Estados de Filtros y Ordenamiento ---
   const [searchTerm, setSearchTerm] = useState('');
   const [filterAsesor, setFilterAsesor] = useState('');
   const [filterEstado, setFilterEstado] = useState('');
@@ -97,22 +218,29 @@ export default function App() {
   const [filterFuente, setFilterFuente] = useState(''); 
   const [filterCampania, setFilterCampania] = useState(''); 
   const [reportFilterCalificacion, setReportFilterCalificacion] = useState(''); 
-  const [sortConfig, setSortConfig] = useState({ key: 'fecha_ingreso', direction: 'descending' });
+  const [sortConfig, setSortConfig] = useState({ key: 'id', direction: 'descending' });
 
-  // --- Módulo de Administración y Configuración (Local & Nube) ---
   const getInitialList = (key, defaultList) => {
     const savedList = localStorage.getItem(key);
-    return savedList ? JSON.parse(savedList) : defaultList;
+    try {
+      return savedList ? JSON.parse(savedList) : defaultList;
+    } catch(e) {
+      return defaultList;
+    }
   };
 
   const getInitialAsesoresList = () => {
     const savedList = localStorage.getItem('asesoresList');
     if (savedList) {
-      const parsed = JSON.parse(savedList);
-      if (parsed.length > 0 && typeof parsed[0] === 'string') {
-        return parsed.map(nombre => ({ nombre, correo: '' })).sort((a, b) => a.nombre.localeCompare(b.nombre));
-      }
-      return parsed.sort((a, b) => a.nombre.localeCompare(b.nombre));
+      try {
+        const parsed = JSON.parse(savedList);
+        if (Array.isArray(parsed)) {
+          if (parsed.length > 0 && typeof parsed[0] === 'string') {
+            return parsed.map(nombre => ({ nombre, correo: '' })).sort((a, b) => (a?.nombre || '').localeCompare(b?.nombre || ''));
+          }
+          return parsed.sort((a, b) => (a?.nombre || '').localeCompare(b?.nombre || ''));
+        }
+      } catch(e) {}
     }
     return [];
   };
@@ -133,96 +261,57 @@ export default function App() {
   const [newFuenteName, setNewFuenteName] = useState('');
   const [newCampaniaName, setNewCampaniaName] = useState('');
 
-  // Efectos para guardar las listas en localStorage
   useEffect(() => { localStorage.setItem('asesoresList', JSON.stringify(asesoresList)); }, [asesoresList]);
   useEffect(() => { localStorage.setItem('lineasList', JSON.stringify(lineasList)); }, [lineasList]);
   useEffect(() => { localStorage.setItem('accionesList', JSON.stringify(accionesList)); }, [accionesList]);
   useEffect(() => { localStorage.setItem('fuentesList', JSON.stringify(fuentesList)); }, [fuentesList]);
   useEffect(() => { localStorage.setItem('campaniasList', JSON.stringify(campaniasList)); }, [campaniasList]);
 
-  // URLs centralizadas (2 principales) con defaults predefinidos
-  const DEFAULT_URL_DATOS = "https://default2dad2f4230e64fe8adc416a2300053.14.environment.api.powerplatform.com:443/powerautomate/automations/direct/workflows/b4faf61d50994a6a83f7d1f28e3d8c78/triggers/manual/paths/invoke?api-version=1&sp=%2Ftriggers%2Fmanual%2Frun&sv=1.0&sig=7yYU2eVMAaTyWfdIsKdg_40bQIHfr9JWNg01200Ncz8";
-  const DEFAULT_URL_CONFIG = "https://default2dad2f4230e64fe8adc416a2300053.14.environment.api.powerplatform.com:443/powerautomate/automations/direct/workflows/c3760089aa194bffab0b4997b56ed1d1/triggers/manual/paths/invoke?api-version=1&sp=%2Ftriggers%2Fmanual%2Frun&sv=1.0&sig=lfGu8reb8dGM-e1OCf5oXPW_QOwDFqw8X8YZ5b6p1zM";
-
-  const [paConfig, setPaConfig] = useState({
-    urlDatos: localStorage.getItem('pa_url_datos') || DEFAULT_URL_DATOS, 
-    urlConfig: localStorage.getItem('pa_url_config') || DEFAULT_URL_CONFIG 
-  });
-  
-  const [saveConfigSuccess, setSaveConfigSuccess] = useState(false);
-
-  const handleConfigChange = (e) => {
-    const { name, value } = e.target;
-    setPaConfig({ ...paConfig, [name]: value });
-  };
-
-  // --- LÓGICA DE NUBE PARA LA CONFIGURACIÓN (CSV-like Schema con Switch) ---
   const fetchConfigFromCloud = async () => {
-    if (!paConfig.urlConfig) return;
+    if (!URL_CONFIG) return;
     
     setIsSyncingConfig(true);
     addLog('Descargando configuración inicial...', 'info');
     
     try {
       const payloadGet = {
-        tipo: "GET",
-        id: "", 
-        Title: "",
-        Título: "",
-        CORREOS: "",
-        LINEAS_INTERES: "",
-        ACCIONES: "",
-        FUENTES: "",
-        CAMPANIAS: "",
-        URL_DATOS: "",
-        URL_CONFIG: ""
+        tipo: "GET", id: "", Title: "", Título: "", CORREOS: "", LINEAS_INTERES: "",
+        ACCIONES: "", FUENTES: "", CAMPANIAS: "", URL_DATOS: "", URL_CONFIG: ""
       };
 
-      const response = await fetch(paConfig.urlConfig, {
+      const response = await fetch(URL_CONFIG, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payloadGet)
       });
 
-      if (response.status === 202) {
-        throw new Error("Power Automate devolvió 202. Desactiva 'Respuesta asincrónica' en la configuración del bloque 'Respuesta'.");
-      }
+      if (response.status === 202) throw new Error("PA devolvió 202. Desactiva 'Respuesta asincrónica'.");
       if (!response.ok) throw new Error(`HTTP Status: ${response.status}`);
       
       const data = await response.json();
-      
-      // Adaptación para extraer la configuración leyendo de .body o .value si viene empaquetado por SP
       let configData = data;
-      if (data.body) {
-        configData = typeof data.body === 'string' ? JSON.parse(data.body) : data.body;
-      }
-      
-      if (configData.value) {
-        configData = Array.isArray(configData.value) ? configData.value[0] : configData.value;
-      } else if (Array.isArray(configData)) {
-        configData = configData[0];
-      }
+      if (data.body) configData = typeof data.body === 'string' ? JSON.parse(data.body) : data.body;
+      if (configData.value) configData = Array.isArray(configData.value) ? configData.value[0] : configData.value;
+      else if (Array.isArray(configData)) configData = configData[0];
 
       if (!configData) throw new Error("No se encontraron datos en la respuesta.");
 
       const parseSemicolonString = (str) => (str ? String(str).split(';').map(s => s.trim()).filter(Boolean) : []);
 
-      // Se usa Title (SharePoint default) prioritariamente
       const rawNombres = configData.Title || configData.Título || configData.Titulo || configData.TITULO || "";
       const nombresAsesores = parseSemicolonString(rawNombres);
       const correosAsesores = parseSemicolonString(configData.CORREOS);
       const extractedAsesores = nombresAsesores.map((nombre, i) => ({ 
-        nombre, 
-        correo: correosAsesores[i] || '' 
+        nombre, correo: correosAsesores[i] || '' 
       }));
 
-      if(extractedAsesores.length > 0) setAsesoresList(extractedAsesores.sort((a, b) => a.nombre.localeCompare(b.nombre)));
-      if(configData.LINEAS_INTERES) setLineasList(parseSemicolonString(configData.LINEAS_INTERES).sort((a, b) => a.localeCompare(b)));
-      if(configData.ACCIONES) setAccionesList(parseSemicolonString(configData.ACCIONES).sort((a, b) => a.localeCompare(b)));
-      if(configData.FUENTES) setFuentesList(parseSemicolonString(configData.FUENTES).sort((a, b) => a.localeCompare(b)));
-      if(configData.CAMPANIAS) setCampaniasList(parseSemicolonString(configData.CAMPANIAS).sort((a, b) => a.localeCompare(b)));
+      if(extractedAsesores.length > 0) setAsesoresList(extractedAsesores.sort((a, b) => (a?.nombre || '').localeCompare(b?.nombre || '')));
+      if(configData.LINEAS_INTERES) setLineasList(parseSemicolonString(configData.LINEAS_INTERES).sort((a, b) => (a || '').localeCompare(b || '')));
+      if(configData.ACCIONES) setAccionesList(parseSemicolonString(configData.ACCIONES).sort((a, b) => (a || '').localeCompare(b || '')));
+      if(configData.FUENTES) setFuentesList(parseSemicolonString(configData.FUENTES).sort((a, b) => (a || '').localeCompare(b || '')));
+      if(configData.CAMPANIAS) setCampaniasList(parseSemicolonString(configData.CAMPANIAS).sort((a, b) => (a || '').localeCompare(b || '')));
 
-      addLog('Configuración actualizada usando esquema separado por ;', 'success');
+      addLog('Configuración sincronizada desde la Nube.', 'success');
     } catch (error) {
       console.error(error);
       addLog(`Fallo al descargar config: ${error.message}`, 'error');
@@ -231,17 +320,12 @@ export default function App() {
     }
   };
 
-  // Función unificada para guardar los datos en la Nube (SharePoint)
   const syncConfigToCloud = async (overrides = {}) => {
-    const targetUrlConfig = overrides.urlConfig !== undefined ? overrides.urlConfig : paConfig.urlConfig;
-    const targetUrlDatos = overrides.urlDatos !== undefined ? overrides.urlDatos : paConfig.urlDatos;
-
-    if (!targetUrlConfig) return;
+    if (!URL_CONFIG) return;
 
     setIsSyncingConfig(true);
-    addLog('Sincronizando configuración con la Nube...', 'info');
+    addLog('Sincronizando cambios de configuración con la Nube...', 'info');
 
-    // Usar overrides si se mandan (ej. al agregar al instante), sino usar el state actual
     const currentAsesores = overrides.asesores || asesoresList;
     const currentLineas = overrides.lineas || lineasList;
     const currentAcciones = overrides.acciones || accionesList;
@@ -253,64 +337,43 @@ export default function App() {
         tipo: "UPDATE",
         id: "1", 
         Title: currentAsesores.map(a => a.nombre).join(';') || "",
-        Título: currentAsesores.map(a => a.nombre).join(';') || "", // Mantenemos por si el schema lo exige
+        Título: currentAsesores.map(a => a.nombre).join(';') || "", 
         CORREOS: currentAsesores.map(a => a.correo).join(';') || "",
         LINEAS_INTERES: currentLineas.join(';') || "",
         ACCIONES: currentAcciones.join(';') || "",
         FUENTES: currentFuentes.join(';') || "",
         CAMPANIAS: currentCampanias.join(';') || "",
-        URL_DATOS: targetUrlDatos || "",
-        URL_CONFIG: targetUrlConfig || ""
+        URL_DATOS: URL_DATOS || "",
+        URL_CONFIG: URL_CONFIG || ""
       };
 
-      const response = await fetch(targetUrlConfig, {
+      const response = await fetch(URL_CONFIG, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)
       });
 
-      if (response.status === 202) {
-        throw new Error("Power Automate devolvió 202. Desactiva 'Respuesta asincrónica' en la configuración del bloque 'Respuesta'.");
-      }
+      if (response.status === 202) throw new Error("PA devolvió 202. Desactiva 'Respuesta asincrónica'.");
       if (!response.ok) throw new Error(`HTTP Status: ${response.status}`);
       
-      showToast('Nube actualizada exitosamente.', 'success');
-      addLog('Configuración sobrescrita en la nube.', 'success');
-
+      showToast('Configuración guardada exitosamente.', 'success');
     } catch (error) {
       console.error(error);
       showToast('Error al sincronizar con la nube.', 'error');
-      addLog(`Fallo al subir config: ${error.message}`, 'error');
     } finally {
       setIsSyncingConfig(false);
     }
   };
 
-  // Botón "Guardar Arquitectura" en pestaña Sistema
-  const handleSaveConfig = async () => {
-    localStorage.setItem('pa_url_datos', paConfig.urlDatos);
-    localStorage.setItem('pa_url_config', paConfig.urlConfig);
-    setSaveConfigSuccess(true);
-    
-    // Ejecuta la sincronización en la Nube con las nuevas URLs recién escritas
-    await syncConfigToCloud({ urlDatos: paConfig.urlDatos, urlConfig: paConfig.urlConfig });
-    
-    setTimeout(() => setSaveConfigSuccess(false), 3000);
-  };
-
-  // Ejecutar carga inicial solo si hay URL y listas vacías
   useEffect(() => {
-    if (paConfig.urlConfig) {
-      fetchConfigFromCloud();
-    }
+    if (URL_CONFIG) fetchConfigFromCloud();
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []); 
 
-  // --- Funciones manuales para agregar/quitar de configuración (Con Sincronización Automática) ---
   const handleAddAsesor = () => {
     const trimmedName = newAsesorName.trim();
     if (trimmedName && !asesoresList.some(a => a.nombre === trimmedName)) {
-      const newList = [...asesoresList, { nombre: trimmedName, correo: newAsesorEmail.trim() }].sort((a, b) => a.nombre.localeCompare(b.nombre));
+      const newList = [...asesoresList, { nombre: trimmedName, correo: newAsesorEmail.trim() }].sort((a, b) => (a?.nombre || '').localeCompare(b?.nombre || ''));
       setAsesoresList(newList);
       setNewAsesorName('');
       setNewAsesorEmail('');
@@ -329,7 +392,7 @@ export default function App() {
 
   const handleAddLinea = () => {
     if (newLineaName.trim() && !lineasList.includes(newLineaName.trim())) {
-      const newList = [...lineasList, newLineaName.trim()].sort((a, b) => a.localeCompare(b));
+      const newList = [...lineasList, newLineaName.trim()].sort((a, b) => (a || '').localeCompare(b || ''));
       setLineasList(newList);
       setNewLineaName('');
       syncConfigToCloud({ lineas: newList });
@@ -345,7 +408,7 @@ export default function App() {
 
   const handleAddAccion = () => {
     if (newAccionName.trim() && !accionesList.includes(newAccionName.trim())) {
-      const newList = [...accionesList, newAccionName.trim()].sort((a, b) => a.localeCompare(b));
+      const newList = [...accionesList, newAccionName.trim()].sort((a, b) => (a || '').localeCompare(b || ''));
       setAccionesList(newList);
       setNewAccionName('');
       syncConfigToCloud({ acciones: newList });
@@ -361,7 +424,7 @@ export default function App() {
 
   const handleAddFuente = () => {
     if (newFuenteName.trim() && !fuentesList.includes(newFuenteName.trim().toUpperCase())) {
-      const newList = [...fuentesList, newFuenteName.trim().toUpperCase()].sort((a, b) => a.localeCompare(b));
+      const newList = [...fuentesList, newFuenteName.trim().toUpperCase()].sort((a, b) => (a || '').localeCompare(b || ''));
       setFuentesList(newList);
       setNewFuenteName('');
       syncConfigToCloud({ fuentes: newList });
@@ -377,7 +440,7 @@ export default function App() {
 
   const handleAddCampania = () => {
     if (newCampaniaName.trim() && !campaniasList.includes(newCampaniaName.trim())) {
-      const newList = [...campaniasList, newCampaniaName.trim()].sort((a, b) => a.localeCompare(b));
+      const newList = [...campaniasList, newCampaniaName.trim()].sort((a, b) => (a || '').localeCompare(b || ''));
       setCampaniasList(newList);
       setNewCampaniaName('');
       syncConfigToCloud({ campanias: newList });
@@ -402,7 +465,7 @@ export default function App() {
     leadsData.forEach(lead => {
       if (lead.asesor && lead.asesor.trim() !== '') {
         const asesorNombre = lead.asesor.trim();
-        if (!newAsesores.some(a => a.nombre === asesorNombre)) {
+        if (!newAsesores.some(a => a?.nombre === asesorNombre)) {
           newAsesores.push({ nombre: asesorNombre, correo: '' });
         }
       }
@@ -412,11 +475,11 @@ export default function App() {
       if (lead.campania && lead.campania.trim() !== '') newCampanias.add(lead.campania.trim());
     });
 
-    if (newAsesores.length !== asesoresList.length) setAsesoresList(newAsesores.sort((a, b) => a.nombre.localeCompare(b.nombre)));
-    if (newLineas.size !== lineasList.length) setLineasList(Array.from(newLineas).sort((a, b) => a.localeCompare(b)));
-    if (newAcciones.size !== accionesList.length) setAccionesList(Array.from(newAcciones).sort((a, b) => a.localeCompare(b)));
-    if (newFuentes.size !== fuentesList.length) setFuentesList(Array.from(newFuentes).sort((a, b) => a.localeCompare(b)));
-    if (newCampanias.size !== campaniasList.length) setCampaniasList(Array.from(newCampanias).sort((a, b) => a.localeCompare(b)));
+    if (newAsesores.length !== asesoresList.length) setAsesoresList(newAsesores.sort((a, b) => (a?.nombre || '').localeCompare(b?.nombre || '')));
+    if (newLineas.size !== lineasList.length) setLineasList(Array.from(newLineas).sort((a, b) => (a || '').localeCompare(b || '')));
+    if (newAcciones.size !== accionesList.length) setAccionesList(Array.from(newAcciones).sort((a, b) => (a || '').localeCompare(b || '')));
+    if (newFuentes.size !== fuentesList.length) setFuentesList(Array.from(newFuentes).sort((a, b) => (a || '').localeCompare(b || '')));
+    if (newCampanias.size !== campaniasList.length) setCampaniasList(Array.from(newCampanias).sort((a, b) => (a || '').localeCompare(b || '')));
   };
 
   useEffect(() => {
@@ -426,27 +489,151 @@ export default function App() {
       if (!isNaN(ingreso.getTime()) && !isNaN(control.getTime())) {
         const diffMs = control - ingreso;
         const diffHrs = (diffMs / (1000 * 60 * 60)).toFixed(2);
-        setFormData(prev => ({ ...prev, tiempo_respuesta_hrs: diffHrs > 0 ? diffHrs : '0.00' }));
+        const newValue = diffHrs > 0 ? diffHrs : '0.00';
+        setFormData(prev => prev.tiempo_respuesta_hrs !== newValue ? { ...prev, tiempo_respuesta_hrs: newValue } : prev);
       }
     } else {
-      setFormData(prev => ({ ...prev, tiempo_respuesta_hrs: '' }));
+      setFormData(prev => prev.tiempo_respuesta_hrs !== '' ? { ...prev, tiempo_respuesta_hrs: '' } : prev);
     }
   }, [formData.fecha_ingreso, formData.fecha_control]);
 
   const handleChange = (e) => {
     const { name, value, type, checked } = e.target;
-    setFormData({ ...formData, [name]: type === 'checkbox' ? checked : value });
+    setFormData(prev => ({ ...prev, [name]: type === 'checkbox' ? checked : value }));
   };
 
-  const handleEditLead = (lead) => {
-    setEditingLeadId(lead.id);
-    const safeLead = Object.keys(lead).reduce((acc, key) => {
-        acc[key] = lead[key] === null ? '' : lead[key];
-        return acc;
-    }, {});
-    setFormData({ ...initialState, ...safeLead });
-    setShowEditModal(true);
-    addLog(`Abriendo modal de edición para registro ID [${lead.id}].`, 'info');
+  // --- FUNCIÓN ROBUSTA PARA PROCESAR JSON DE SHAREPOINT ---
+  const extractSingleItem = (data) => {
+    let item = {};
+    if (Array.isArray(data) && data.length > 0) item = data[0];
+    else if (data.value && Array.isArray(data.value) && data.value.length > 0) item = data.value[0];
+    else if (data.body && typeof data.body === 'object') {
+       if (data.body.d) item = data.body.d; 
+       else if (Array.isArray(data.body) && data.body.length > 0) item = data.body[0];
+       else if (data.body.value && Array.isArray(data.body.value) && data.body.value.length > 0) item = data.body.value[0];
+       else item = data.body;
+    } else if (data.d && typeof data.d === 'object') item = data.d; 
+    else if (typeof data === 'object') item = data;
+    return item;
+  };
+
+  // --- FORMATEADORES SEGUROS DE HORA (Ajustan UTC a Local para el Formulario) ---
+  const formatDateTime = (val) => {
+    if (!val) return '';
+    try {
+      const d = new Date(val);
+      if (isNaN(d.getTime())) return String(val).substring(0, 16);
+      const pad = (n) => n.toString().padStart(2, '0');
+      return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+    } catch(e) {
+      return String(val).substring(0, 16);
+    }
+  };
+
+  const formatDate = (val) => {
+    if (!val) return '';
+    try {
+       const d = new Date(val);
+       if (isNaN(d.getTime())) return String(val).split('T')[0];
+       const pad = (n) => n.toString().padStart(2, '0');
+       return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
+    } catch(e) {
+       return String(val).split('T')[0];
+    }
+  };
+
+  const formatTime = (val) => {
+     if (!val) return '';
+     return String(val).substring(0, 5);
+  };
+
+  // Convertidor Local -> UTC para enviar a SharePoint 
+  const toSPDate = (localStr) => {
+    if (!localStr) return "";
+    try { 
+      return new Date(localStr).toISOString(); 
+    } 
+    catch(e) { return localStr; }
+  };
+
+  const mapItemToFormData = (item) => {
+    const extractValue = (field) => {
+      if (field && typeof field === 'object' && field.Value !== undefined) return field.Value;
+      return field;
+    };
+
+    return {
+      id: item.ID || item.Id || item.id || item.ItemInternalId || '',
+      titulo: item.Title || item.titulo || item.TITULO || '',
+      fecha_ingreso: formatDateTime(item.FECHA_INGRESO || item.fecha_ingreso),
+      fecha_control: formatDateTime(item.FECHA_CONTROL || item.fecha_control),
+      tiempo_respuesta_hrs: String(item.TIEMPO_RESPUESTA_HRS ?? item.tiempo_respuesta_hrs ?? ''),
+      novedad_tiempo: extractValue(item.NOVEDAD_TIEMPO || item.novedad_tiempo) || '',
+      fuente_medio: extractValue(item.FUENTE_MEDIO || item.fuente_medio) || '',
+      campania: extractValue(item.CAMPANIA || item.campania) || '',
+      celular: String(item.CELULAR || item.celular || ''),
+      email: item.EMAIL || item.email || '',
+      linea_interes: extractValue(item.LINEA_INTERES || item.LINEAS_INTERES || item.linea_interes) || '',
+      estado: extractValue(item.ESTADO || item.estado) || 'Nuevo',
+      asesor: extractValue(item.ASESOR || item.asesor) || '',
+      calificacion_lead: extractValue(item.CALIFICACION_LEAD || item.calificacion_lead) || 'Por evaluar',
+      razon_calificacion: item.RAZON_CALIFICACION || item.razon_calificacion || '',
+      notas_seguimiento: item.NOTAS_SEGUIMIENTO || item.notas_seguimiento || '',
+      fecha_actualizacion_nota: formatDate(item.FECHA_ACTUALIZACION_NOTA || item.fecha_actualizacion_nota),
+      fecha_seguimiento_dia: formatDate(item.FECHA_SEGUIMIENTO_DIA || item.fecha_seguimiento_dia),
+      jornada_seguimiento: extractValue(item.JORNADA_SEGUIMIENTO || item.jornada_seguimiento) || '',
+      hora_seguimiento: formatTime(item.HORA_SEGUIMIENTO || item.hora_seguimiento),
+      accion: extractValue(item.ACCION || item.accion) || '',
+      estado_orden: extractValue(item.ESTADO_ORDEN || item.estado_orden) || 'Abierta',
+      fecha_cierre: formatDateTime(item.FECHA_CIERRE || item.fecha_cierre),
+      observaciones: item.OBSERVACIONES || item.observaciones || '',
+      programar_recordatorio: item.PROGRAMAR_RECORDATORIO === "True" || item.PROGRAMAR_RECORDATORIO === true || item.programar_recordatorio === true || String(item.PROGRAMAR_RECORDATORIO).toLowerCase() === 'true',
+      canal_recordatorio: extractValue(item.CANAL_RECORDATORIO || item.canal_recordatorio) || 'email',
+      link_adjuntos: item.LINK_ADJUNTOS || item.link_adjuntos || item['{Link}'] || ''
+    };
+  };
+
+  // --- LÓGICA: GET DETAILS ---
+  const handleEditLead = async (lead) => {
+    if (!URL_DATOS) return showToast("Falta URL de Datos", "error");
+    
+    setIsFetchingDetails(true);
+    addLog(`Consultando detalles completos para ID [${lead.id}]...`, 'info');
+
+    try {
+      const payloadGetDetails = {
+        tipo: "GET_DETAILS",
+        id: String(lead.id),
+        ...getBasePayload() 
+      };
+
+      const response = await fetch(URL_DATOS, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payloadGetDetails)
+      });
+
+      if (response.status === 202) throw new Error("PA devolvió 202.");
+      if (!response.ok) throw new Error(`HTTP Error: ${response.status}`);
+
+      const textData = await response.text();
+      const rawData = JSON.parse(textData);
+      
+      const item = extractSingleItem(rawData);
+      const safeLead = mapItemToFormData(item);
+
+      setFormData({ ...initialState, ...safeLead });
+      setEditingLeadId(lead.id);
+      setShowEditModal(true);
+      addLog(`Edición abierta para ID [${lead.id}].`, 'success');
+
+    } catch (error) {
+      console.error(error);
+      showToast("Error al obtener detalles del lead.", "error");
+      addLog(`Fallo GET_DETAILS: ${error.message}`, 'error');
+    } finally {
+      setIsFetchingDetails(false);
+    }
   };
 
   const handleCancelEdit = () => {
@@ -456,80 +643,67 @@ export default function App() {
     addLog('Edición cancelada.', 'warning');
   };
 
-  // --- Ejecutar Eliminación (DELETE) ---
   const executeDelete = async () => {
     if (!leadToDelete) return;
-    if (!paConfig.urlDatos) {
-       showToast("Debes configurar la URL_DATOS en la pestaña Sistema.", "warning");
+    if (!URL_DATOS) {
+       showToast("Falta VITE_PoAu_URL_EMBUDOCOM_DATOS", "error");
        return;
     }
 
     setIsDeleting(true);
-    addLog(`Enviando petición DELETE para registro ID [${leadToDelete.id}]...`, 'info');
+    addLog(`Enviando DELETE ID [${leadToDelete.id}]...`, 'info');
 
     try {
       const payloadDelete = {
         tipo: "DELETE",
         id: String(leadToDelete.id),
-        titulo: "", email: "", fecha_ingreso: "", fecha_control: "",
-        tiempo_respuesta_hrs: "", novedad_tiempo: "", fuente_medio: "", campania: "",
-        celular: "", linea_interes: "", estado: "", asesor: "", calificacion_lead: "",
-        razon_calificacion: "", notas_seguimiento: "", fecha_actualizacion_nota: "",
-        fecha_seguimiento_dia: "", jornada_seguimiento: "", hora_seguimiento: "",
-        accion: "", estado_orden: "", fecha_cierre: "", observaciones: "",
-        programar_recordatorio: false, canal_recordatorio: "", email_asesor: "",
-        fecha_registro_sistema: ""
+        ...getBasePayload()
       };
 
-      const response = await fetch(paConfig.urlDatos, {
+      const response = await fetch(URL_DATOS, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payloadDelete)
       });
 
-      if (response.status === 202) {
-        throw new Error("Power Automate devolvió 202. Desactiva 'Respuesta asincrónica' en la configuración del bloque 'Respuesta'.");
-      }
+      if (response.status === 202) throw new Error("PA devolvió 202.");
       if (!response.ok) throw new Error(`HTTP Status: ${response.status}`);
       
-      addLog(`Registro ID [${leadToDelete.id}] eliminado exitosamente.`, 'success');
-      showToast(`Lead eliminado con éxito de SharePoint.`, 'success');
-
+      showToast(`Lead eliminado de SharePoint.`, 'success');
       setLeadToDelete(null);
-      fetchLeadsData(false); // Refrescar tabla silenciosamente
+      fetchLeadsData(false); 
       
     } catch (error) {
-      console.error("Error al eliminar:", error);
-      addLog(`Fallo al eliminar: ${error.message}`, 'error');
-      showToast(`Error al eliminar el registro. Revisa la URL_DATOS.`, 'error');
+      console.error(error);
+      showToast(`Error al eliminar. Revisa logs.`, 'error');
     } finally {
       setIsDeleting(false);
     }
   };
 
-  // --- Enviar o Actualizar Datos de Lead (Arquitectura Switch) ---
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!paConfig.urlDatos) {
-       showToast("Debes configurar la URL_DATOS en la pestaña Sistema.", "warning");
+    if (!URL_DATOS) {
+       showToast("Falta VITE_PoAu_URL_EMBUDOCOM_DATOS en .env", "error");
        return;
     }
 
     setIsSubmitting(true);
-    const isUpdate = !!editingLeadId;
-    addLog(isUpdate ? 'Enviando petición UPDATE...' : 'Enviando petición POST...', 'info');
-
+    const isUpdate = !!editingLeadId; 
+    const tipoMetodo = isUpdate ? "UPDATE" : "POST";
+    const targetId = isUpdate ? String(editingLeadId) : "";
+    
     try {
       const asesorSeleccionadoNombre = formData.asesor ? formData.asesor.trim() : '';
       const selectedAsesorObj = asesoresList.find(a => a.nombre.trim() === asesorSeleccionadoNombre);
       
       const payload = {
-        tipo: isUpdate ? "UPDATE" : "POST",
-        id: isUpdate ? String(editingLeadId) : "",
+        tipo: tipoMetodo,
+        id: targetId,
         titulo: formData.titulo || "",
         email: formData.email || "", 
-        fecha_ingreso: formData.fecha_ingreso || "",
-        fecha_control: formData.fecha_control || "",
+        fecha_ingreso: toSPDate(formData.fecha_ingreso),
+        fecha_control: toSPDate(formData.fecha_control),
         tiempo_respuesta_hrs: String(formData.tiempo_respuesta_hrs || ""),
         novedad_tiempo: formData.novedad_tiempo || "",
         fuente_medio: formData.fuente_medio || "",
@@ -547,27 +721,26 @@ export default function App() {
         hora_seguimiento: formData.hora_seguimiento || "",
         accion: formData.accion || "",
         estado_orden: formData.estado_orden || "",
-        fecha_cierre: formData.fecha_cierre || "",
+        fecha_cierre: toSPDate(formData.fecha_cierre),
         observaciones: formData.observaciones || "",
         programar_recordatorio: Boolean(formData.programar_recordatorio),
         canal_recordatorio: formData.canal_recordatorio || "",
-        fecha_registro_sistema: new Date().toISOString(),
+        fecha_registro_sistema: new Date().toISOString(), 
         email_asesor: selectedAsesorObj ? selectedAsesorObj.correo : '' 
       };
 
-      const response = await fetch(paConfig.urlDatos, {
+      addLog(`Enviando JSON -> tipo: "${payload.tipo}", id: "${payload.id}"`, 'info');
+
+      const response = await fetch(URL_DATOS, {
         method: 'POST', 
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)
       });
       
-      if (response.status === 202) {
-        throw new Error("Power Automate devolvió 202. Desactiva 'Respuesta asincrónica' en la configuración del bloque 'Respuesta'.");
-      }
+      if (response.status === 202) throw new Error("PA devolvió 202.");
       if (!response.ok) throw new Error(`HTTP Error: ${response.status}`);
       
-      addLog(`Registro ${isUpdate ? 'actualizado' : 'creado'} exitosamente.`, 'success');
-      showToast(`Lead ${isUpdate ? 'actualizado' : 'guardado'} con éxito en SharePoint.`, 'success');
+      showToast(`Lead ${isUpdate ? 'actualizado' : 'guardado'} con éxito.`, 'success');
 
       if (formData.programar_recordatorio && formData.fecha_seguimiento_dia) {
         const timeString = formData.hora_seguimiento || '00:00';
@@ -590,50 +763,38 @@ export default function App() {
       
     } catch (error) {
       console.error("Error al procesar:", error);
-      addLog(`Fallo de operación: ${error.message}`, 'error');
-      showToast(`Hubo un error al ${editingLeadId ? 'actualizar' : 'enviar'} los datos. Revisa la URL_DATOS.`, 'error');
+      showToast(`Error de envío. Revisa Logs.`, 'error');
     } finally {
       setIsSubmitting(false);
     }
   };
 
-  // --- Obtener Leads (Arquitectura Switch GET con mapeo riguroso) ---
   const fetchLeadsData = async (showSuccessToast = true) => {
-    if (!paConfig.urlDatos) {
-      addLog('Error: Intento de cargar datos sin URL_DATOS configurada.', 'error');
-      showToast("Configura la URL_DATOS en Configuración > Sistema para traer los datos.", 'error');
+    if (!URL_DATOS) {
+      showToast("Falta VITE_PoAu_URL_EMBUDOCOM_DATOS en .env", "error");
       return;
     }
 
     setIsLoadingData(true);
-    addLog('Ejecutando petición de consulta (tipo: GET) a URL_DATOS...', 'info');
+    addLog('Consultando leads (Vista rápida)...', 'info');
     try {
       const payloadGet = {
           tipo: "GET",
-          id: "", titulo: "", email: "", fecha_ingreso: "", fecha_control: "",
-          tiempo_respuesta_hrs: "", novedad_tiempo: "", fuente_medio: "", campania: "",
-          celular: "", linea_interes: "", estado: "", asesor: "", calificacion_lead: "",
-          razon_calificacion: "", notas_seguimiento: "", fecha_actualizacion_nota: "",
-          fecha_seguimiento_dia: "", jornada_seguimiento: "", hora_seguimiento: "",
-          accion: "", estado_orden: "", fecha_cierre: "", observaciones: "",
-          programar_recordatorio: false, canal_recordatorio: "", email_asesor: "",
-          fecha_registro_sistema: ""
+          id: "",
+          ...getBasePayload()
       };
 
-      const response = await fetch(paConfig.urlDatos, {
+      const response = await fetch(URL_DATOS, {
          method: 'POST', 
          headers: { 'Content-Type': 'application/json' },
          body: JSON.stringify(payloadGet)
       });
 
-      if (response.status === 202) {
-        throw new Error("Power Automate devolvió 202. Desactiva 'Respuesta asincrónica' en la configuración del bloque 'Respuesta'.");
-      }
+      if (response.status === 202) throw new Error("PA devolvió 202.");
       if (!response.ok) throw new Error(`HTTP Status: ${response.status}`);
 
       const textData = await response.text();
       if (!textData || textData.trim() === '') {
-         addLog('La respuesta de leads está vacía.', 'warning');
          setSavedLeads([]);
          return;
       }
@@ -642,14 +803,15 @@ export default function App() {
           const data = JSON.parse(textData);
           
           let rawLeads = [];
-          if (Array.isArray(data)) {
-            rawLeads = data;
-          } else if (data.value && Array.isArray(data.value)) {
-            rawLeads = data.value;
-          } else if (data.body && typeof data.body === 'object') {
-             if (Array.isArray(data.body)) rawLeads = data.body;
+          if (Array.isArray(data)) rawLeads = data;
+          else if (data.value && Array.isArray(data.value)) rawLeads = data.value;
+          else if (data.body && typeof data.body === 'object') {
+             if (data.body.d) rawLeads = Array.isArray(data.body.d) ? data.body.d : [data.body.d];
+             else if (Array.isArray(data.body)) rawLeads = data.body;
              else if (data.body.value && Array.isArray(data.body.value)) rawLeads = data.body.value;
              else if (data.body.Title || data.body.titulo) rawLeads = [data.body]; 
+          } else if (data.d && typeof data.d === 'object') {
+             rawLeads = Array.isArray(data.d) ? data.d : [data.d];
           } else if (typeof data === 'object' && (data.Title || data.titulo)) {
              rawLeads = [data];
           }
@@ -660,12 +822,10 @@ export default function App() {
           };
 
           const mappedLeads = rawLeads.map(item => ({
-            id: item.ID || item.id || '',
+            id: item.ID || item.Id || item.id || item.ItemInternalId || '',
             titulo: item.Title || item.titulo || item.TITULO || '',
             fecha_ingreso: item.FECHA_INGRESO || item.fecha_ingreso || '',
-            fecha_control: item.FECHA_CONTROL || item.fecha_control || '',
             tiempo_respuesta_hrs: String(item.TIEMPO_RESPUESTA_HRS || item.tiempo_respuesta_hrs || ''),
-            novedad_tiempo: extractValue(item.NOVEDAD_TIEMPO || item.novedad_tiempo) || '',
             fuente_medio: extractValue(item.FUENTE_MEDIO || item.fuente_medio) || '',
             campania: extractValue(item.CAMPANIA || item.campania) || '',
             celular: String(item.CELULAR || item.celular || ''),
@@ -674,45 +834,33 @@ export default function App() {
             estado: extractValue(item.ESTADO || item.estado) || 'Nuevo',
             asesor: extractValue(item.ASESOR || item.asesor) || '',
             calificacion_lead: extractValue(item.CALIFICACION_LEAD || item.calificacion_lead) || 'Por evaluar',
-            razon_calificacion: item.RAZON_CALIFICACION || item.razon_calificacion || '',
             notas_seguimiento: item.NOTAS_SEGUIMIENTO || item.notas_seguimiento || '',
-            fecha_actualizacion_nota: item.FECHA_ACTUALIZACION_NOTA || item.fecha_actualizacion_nota || '',
-            fecha_seguimiento_dia: item.FECHA_SEGUIMIENTO_DIA || item.fecha_seguimiento_dia || '',
-            jornada_seguimiento: extractValue(item.JORNADA_SEGUIMIENTO || item.jornada_seguimiento) || '',
-            hora_seguimiento: item.HORA_SEGUIMIENTO || item.hora_seguimiento || '',
             accion: extractValue(item.ACCION || item.accion) || '',
             estado_orden: extractValue(item.ESTADO_ORDEN || item.estado_orden) || 'Abierta',
-            fecha_cierre: item.FECHA_CIERRE || item.fecha_cierre || '',
-            observaciones: item.OBSERVACIONES || item.observaciones || '',
-            programar_recordatorio: item.PROGRAMAR_RECORDATORIO === "True" || item.PROGRAMAR_RECORDATORIO === true || item.programar_recordatorio === true,
-            canal_recordatorio: extractValue(item.CANAL_RECORDATORIO || item.canal_recordatorio) || 'email',
             link_adjuntos: item.LINK_ADJUNTOS || item.link_adjuntos || item['{Link}'] || ''
           }));
 
           setSavedLeads(mappedLeads);
-          addLog(`Carga exitosa: ${mappedLeads.length} registros mapeados.`, 'success');
-          
           extractDynamicOptions(mappedLeads);
 
           if(currentView === 'data' && showSuccessToast) {
             showToast('Datos actualizados correctamente.', 'success');
           }
       } catch(parseError) {
-          console.error("Error analizando JSON Leads:", textData);
-          throw new Error("Power Automate no devolvió un JSON válido.");
+          console.error(parseError);
+          throw new Error("JSON Inválido de SP.");
       }
 
     } catch (error) {
-      console.error("Error obteniendo datos:", error);
+      console.error(error);
       addLog(`Fallo al cargar leads: ${error.message}`, 'error');
-      showToast(`Error al cargar datos. Verifica la configuración de Power Automate.`, 'error');
     } finally {
       setIsLoadingData(false);
     }
   };
 
   useEffect(() => {
-    if ((currentView === 'data' || currentView === 'reports') && paConfig.urlDatos && savedLeads.length === 0) {
+    if ((currentView === 'data' || currentView === 'reports') && URL_DATOS && savedLeads.length === 0) {
       fetchLeadsData(false); 
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -732,7 +880,8 @@ export default function App() {
       items = items.filter(lead => 
         (lead.titulo || '').toLowerCase().includes(lowerSearch) ||
         (lead.celular || '').includes(searchTerm) ||
-        (lead.email || '').toLowerCase().includes(lowerSearch)
+        (lead.email || '').toLowerCase().includes(lowerSearch) ||
+        String(lead.id).includes(searchTerm)
       );
     }
 
@@ -746,10 +895,15 @@ export default function App() {
       items.sort((a, b) => {
         let aValue = a[sortConfig.key] || '';
         let bValue = b[sortConfig.key] || '';
+        
         if (sortConfig.key === 'tiempo_respuesta_hrs') {
           aValue = parseFloat(aValue) || 0;
           bValue = parseFloat(bValue) || 0;
+        } else if (sortConfig.key === 'id') {
+          aValue = parseInt(aValue, 10) || 0;
+          bValue = parseInt(bValue, 10) || 0;
         }
+
         if (aValue < bValue) return sortConfig.direction === 'ascending' ? -1 : 1;
         if (aValue > bValue) return sortConfig.direction === 'ascending' ? 1 : -1;
         return 0;
@@ -780,10 +934,8 @@ export default function App() {
       
       if (calif === 'Caliente' || calif === 'Tibio') { potenciales++; calificados++; } else { noCalificados++; }
       
-      // NUEVO: Efectividad únicamente por venta
       if (lead.accion === 'Venta') ventasCerradas++;
 
-      // NUEVO: Estado de las órdenes
       if (lead.estado_orden === 'Cerrada') ordenesCerradas++;
       else if (lead.estado_orden === 'Abierta') ordenesAbiertas++;
 
@@ -924,13 +1076,7 @@ export default function App() {
         <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
           <div>
             <label className="block text-xs font-bold text-zinc-600 mb-2">Fecha Ingreso</label>
-            {editingLeadId ? (
-              <div className="w-full rounded-sm border-zinc-300 bg-zinc-100 text-zinc-600 border p-3 text-sm font-medium outline-none cursor-not-allowed" title="Fecha de Ingreso protegida contra modificaciones.">
-                {formData.fecha_ingreso ? new Date(formData.fecha_ingreso).toLocaleString([], { dateStyle: 'short', timeStyle: 'short' }) : '-'}
-              </div>
-            ) : (
-              <input type="datetime-local" name="fecha_ingreso" required value={formData.fecha_ingreso} onChange={handleChange} className="w-full rounded-sm border-zinc-300 border p-3 text-sm focus:ring-1 focus:ring-black focus:border-black outline-none bg-zinc-50 focus:bg-white transition-colors" />
-            )}
+            <input type="datetime-local" name="fecha_ingreso" required value={formData.fecha_ingreso} onChange={handleChange} className="w-full rounded-sm border-zinc-300 border p-3 text-sm focus:ring-1 focus:ring-black focus:border-black outline-none bg-zinc-50 focus:bg-white transition-colors" />
           </div>
           <div>
             <label className="block text-xs font-bold text-zinc-600 mb-2">Fecha Control</label>
@@ -1076,6 +1222,7 @@ export default function App() {
             <textarea name="observaciones" rows="2" value={formData.observaciones} onChange={handleChange} className="w-full rounded-sm border-zinc-300 border p-3 text-sm focus:ring-1 focus:ring-black focus:border-black outline-none bg-zinc-50 focus:bg-white transition-colors resize-none"></textarea>
           </div>
           
+          {/* Visualización de Enlace de Archivo Existente (Solo en modo edición) */}
           {editingLeadId && (
              <div className="md:col-span-2 bg-blue-50 border border-blue-200 p-4 rounded-sm flex items-start gap-3 mt-2">
                 <FileText className="text-blue-500 shrink-0 mt-0.5" size={18} />
@@ -1111,19 +1258,8 @@ export default function App() {
         <header className="flex flex-col md:flex-row items-start md:items-center justify-between bg-white p-6 rounded-sm shadow-sm border border-zinc-200 gap-4">
           <div className="flex items-center gap-4">
             <div className="flex items-center gap-4 pr-5 border-r border-zinc-200 h-16">
-              <img 
-                src="/logo.jpg" 
-                alt="Productos Arquitectónicos" 
-                className="h-full object-contain"
-                onError={(e) => {
-                  e.target.onerror = null; 
-                  e.target.style.display = 'none';
-                  const fallback = document.getElementById('fallback-logo');
-                  if (fallback) fallback.style.display = 'flex';
-                }}
-              />
-              <div id="fallback-logo" className="hidden flex-col justify-center">
-                <h1 className="text-4xl font-black text-black tracking-tighter leading-none">pa</h1>
+              <div className="h-full w-16 bg-black flex items-center justify-center rounded-sm">
+                <h1 className="text-3xl font-black text-white tracking-tighter leading-none">pa</h1>
               </div>
             </div>
             <div>
@@ -1157,23 +1293,39 @@ export default function App() {
               </button>
             </div>
 
-            <div className="flex gap-2 ml-auto lg:ml-0">
-              <button 
-                type="button"
-                onClick={() => setShowLogsModal(true)}
-                className="bg-zinc-100 hover:bg-zinc-200 text-black px-4 py-2.5 rounded-sm font-medium border border-zinc-200 transition-colors"
-                title="Ver Logs del Sistema"
-              >
-                <Terminal size={18} />
-              </button>
-              <button 
-                type="button"
-                onClick={() => setShowAdminModal(true)}
-                className="bg-zinc-100 hover:bg-zinc-200 text-black px-4 py-2.5 rounded-sm font-medium border border-zinc-200 transition-colors"
-                title="Configuración"
-              >
-                <Settings size={18} />
-              </button>
+            <div className="flex items-center gap-4 ml-auto lg:ml-2">
+              <div className="flex gap-2">
+                <button 
+                  type="button"
+                  onClick={() => setShowLogsModal(true)}
+                  className="bg-zinc-100 hover:bg-zinc-200 text-black px-3 py-2.5 rounded-sm font-medium border border-zinc-200 transition-colors"
+                  title="Ver Logs del Sistema"
+                >
+                  <Terminal size={18} />
+                </button>
+                <button 
+                  type="button"
+                  onClick={() => setShowAdminModal(true)}
+                  className="bg-zinc-100 hover:bg-zinc-200 text-black px-3 py-2.5 rounded-sm font-medium border border-zinc-200 transition-colors"
+                  title="Configuración"
+                >
+                  <Settings size={18} />
+                </button>
+              </div>
+
+              <div className="flex items-center gap-3 pl-4 border-l border-zinc-200">
+                <div className="text-right hidden sm:block">
+                  <p className="text-xs font-bold text-black leading-none">{currentUser?.name || 'Usuario'}</p>
+                  <p className="text-[10px] text-zinc-500 mt-1 truncate max-w-[120px]">{currentUser?.username || 'Email no disponible'}</p>
+                </div>
+                <button 
+                  onClick={() => instance.logoutPopup()} 
+                  className="p-2 text-zinc-400 hover:text-red-600 hover:bg-red-50 rounded-sm transition-colors"
+                  title="Cerrar sesión"
+                >
+                  <LogOut size={18} />
+                </button>
+              </div>
             </div>
           </div>
         </header>
@@ -1197,6 +1349,16 @@ export default function App() {
                 <span className="text-sm">Recordatorio programado para el <strong>{scheduledReminder.fecha}</strong> vía {scheduledReminder.canal}.</span>
               </div>
             )}
+          </div>
+        )}
+
+        {/* SPINNER DE CARGA GLOBAL AL OBTENER DETALLES */}
+        {isFetchingDetails && (
+          <div className="fixed inset-0 bg-white/50 backdrop-blur-sm z-[100] flex items-center justify-center animate-in fade-in">
+             <div className="bg-white p-6 rounded-xl shadow-2xl flex flex-col items-center gap-4 border border-zinc-200">
+                <Loader2 size={32} className="animate-spin text-black" />
+                <p className="font-bold text-sm text-zinc-800">Cargando detalles del registro...</p>
+             </div>
           </div>
         )}
 
@@ -1282,6 +1444,9 @@ export default function App() {
               <table className="w-full text-left border-collapse min-w-[1600px]">
                 <thead>
                   <tr className="bg-black text-white text-[10px] tracking-widest uppercase border-b border-black">
+                    <th className="p-4 font-bold cursor-pointer hover:bg-zinc-800 transition-colors group" onClick={() => requestSort('id')}>
+                      <div className="flex items-center gap-2">ID {sortConfig?.key === 'id' ? (sortConfig.direction === 'ascending' ? <ChevronUp size={14}/> : <ChevronDown size={14}/>) : <span className="opacity-0 group-hover:opacity-50 transition-opacity"><ChevronUp size={14}/></span>}</div>
+                    </th>
                     <th className="p-4 font-bold cursor-pointer hover:bg-zinc-800 transition-colors group" onClick={() => requestSort('titulo')}>
                       <div className="flex items-center gap-2">Título / Nombre {sortConfig?.key === 'titulo' ? (sortConfig.direction === 'ascending' ? <ChevronUp size={14}/> : <ChevronDown size={14}/>) : <span className="opacity-0 group-hover:opacity-50 transition-opacity"><ChevronUp size={14}/></span>}</div>
                     </th>
@@ -1320,13 +1485,14 @@ export default function App() {
                 <tbody className="divide-y divide-zinc-100">
                   {filteredAndSortedLeads.length === 0 ? (
                     <tr>
-                      <td colSpan="13" className="p-16 text-center text-zinc-500 text-sm">
+                      <td colSpan="14" className="p-16 text-center text-zinc-500 text-sm">
                         {isLoadingData ? 'Cargando datos desde SharePoint...' : searchTerm || filterAsesor || filterEstado || filterMes || filterFuente || filterCampania ? 'No se encontraron resultados para los filtros actuales.' : 'No hay datos registrados. Haz clic en "Actualizar" para traerlos de SharePoint.'}
                       </td>
                     </tr>
                   ) : (
                     filteredAndSortedLeads.map((lead, index) => (
                       <tr key={lead.id || index} className="hover:bg-zinc-50 transition-colors group text-sm text-zinc-700">
+                        <td className="p-4 font-black text-indigo-600 text-center">#{lead.id}</td>
                         <td className="p-4 font-bold text-black">{lead.titulo || '-'}</td>
                         <td className="p-4">{lead.fecha_ingreso ? new Date(lead.fecha_ingreso).toLocaleString([],{dateStyle:'short', timeStyle:'short'}) : '-'}</td>
                         <td className="p-4">{lead.asesor || '-'}</td>
@@ -1374,7 +1540,7 @@ export default function App() {
                           )}
                         </td>
                         <td className="p-4 text-center border-l border-zinc-200 bg-zinc-50 group-hover:bg-zinc-100 transition-colors">
-                          <div className="flex items-center justify-center gap-2">
+                          <div className="flex items-center justify-center gap-1">
                             <button 
                               onClick={() => handleEditLead(lead)} 
                               className="p-2 text-zinc-500 hover:text-black hover:bg-white border border-transparent hover:border-zinc-300 hover:shadow-sm rounded-sm transition-all flex items-center justify-center"
@@ -1384,7 +1550,7 @@ export default function App() {
                             </button>
                             <button 
                               onClick={() => setLeadToDelete(lead)} 
-                              className="p-2 text-zinc-500 hover:text-red-600 hover:bg-white border border-transparent hover:border-red-200 hover:shadow-sm rounded-sm transition-all flex items-center justify-center"
+                              className="p-2 text-zinc-500 hover:text-red-600 hover:bg-red-50 border border-transparent hover:border-red-200 hover:shadow-sm rounded-sm transition-all flex items-center justify-center"
                               title="Eliminar Registro"
                             >
                               <Trash2 size={16} />
@@ -1400,9 +1566,6 @@ export default function App() {
           </div>
         )}
 
-        {/* =========================================
-            MODAL DE CONFIRMACIÓN DE ELIMINACIÓN
-        ============================================= */}
         {leadToDelete && (
           <div className="fixed inset-0 bg-zinc-900/60 backdrop-blur-sm flex items-center justify-center z-[70] p-4">
             <div className="bg-white rounded-sm w-full max-w-md shadow-2xl flex flex-col animate-in zoom-in-95 duration-200 overflow-hidden border border-zinc-200">
@@ -1437,9 +1600,6 @@ export default function App() {
           </div>
         )}
 
-        {/* =========================================
-            MODAL DE EDICIÓN FLOTANTE
-        ============================================= */}
         {showEditModal && editingLeadId && (
            <div className="fixed inset-0 bg-zinc-900/60 backdrop-blur-sm flex items-center justify-center z-[60] p-4">
              <div className="bg-zinc-100 rounded-sm w-full max-w-5xl shadow-2xl flex flex-col max-h-[90vh] border border-zinc-300 animate-in zoom-in-95 duration-200">
@@ -1588,46 +1748,6 @@ export default function App() {
                 </div>
 
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                  {/* Estado de las Órdenes */}
-                  <div className="bg-white p-6 rounded-sm shadow-sm border border-zinc-200">
-                    <h3 className="text-sm font-bold text-black uppercase tracking-wide mb-6 border-b border-zinc-100 pb-3 flex items-center gap-2">
-                       Estado de las Órdenes
-                    </h3>
-                    <div className="flex items-center justify-center gap-8 h-48">
-                      <div className="text-center group flex-1 bg-zinc-50 p-4 rounded-sm border border-zinc-200 hover:border-black transition-colors">
-                        <Briefcase size={28} className="text-zinc-400 mb-3 mx-auto" />
-                        <p className="text-4xl font-black text-black">{reportes.ordenesAbiertas}</p>
-                        <p className="text-xs font-bold text-zinc-500 uppercase tracking-wider mt-2">Abiertas</p>
-                      </div>
-                      <div className="text-center group flex-1 bg-zinc-50 p-4 rounded-sm border border-zinc-200 hover:border-black transition-colors">
-                        <CheckCircle size={28} className="text-zinc-400 mb-3 mx-auto" />
-                        <p className="text-4xl font-black text-black">{reportes.ordenesCerradas}</p>
-                        <p className="text-xs font-bold text-zinc-500 uppercase tracking-wider mt-2">Cerradas</p>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Gráfico Barras Horizontales: Acciones */}
-                  <div className="bg-white p-6 rounded-sm shadow-sm border border-zinc-200">
-                    <h3 className="text-sm font-bold text-black uppercase tracking-wide mb-6 border-b border-zinc-100 pb-3">Embudo de Acciones</h3>
-                    <div className="space-y-5 max-h-[220px] overflow-y-auto pr-2 custom-scrollbar">
-                      {Object.entries(reportes.accionesCount).sort((a,b) => b[1] - a[1]).map(([accion, count]) => {
-                        const percent = reportes.total > 0 ? (count / reportes.total) * 100 : 0;
-                        return (
-                          <div key={accion} className="group">
-                            <div className="flex justify-between text-xs font-bold mb-1.5">
-                              <span className="text-zinc-700">{accion}</span>
-                              <span className="text-black">{count} <span className="text-zinc-400 text-[10px]">({percent.toFixed(0)}%)</span></span>
-                            </div>
-                            <div className="w-full bg-zinc-100 h-3 rounded-sm overflow-hidden">
-                              <div className="h-full rounded-sm bg-emerald-500 group-hover:bg-emerald-600 transition-colors" style={{ width: `${percent}%` }}></div>
-                            </div>
-                          </div>
-                        )
-                      })}
-                    </div>
-                  </div>
-
                   {/* Gráfico de Barras Vertical: Calificación */}
                   <div className="bg-white p-6 rounded-sm shadow-sm border border-zinc-200 flex flex-col">
                     <h3 className="text-sm font-bold text-black uppercase tracking-wide mb-6 border-b border-zinc-100 pb-3">Desglose por Calificación</h3>
@@ -1669,6 +1789,25 @@ export default function App() {
                     </div>
                   </div>
 
+                  {/* Estado de las Órdenes */}
+                  <div className="bg-white p-6 rounded-sm shadow-sm border border-zinc-200">
+                    <h3 className="text-sm font-bold text-black uppercase tracking-wide mb-6 border-b border-zinc-100 pb-3 flex items-center gap-2">
+                       Estado de las Órdenes
+                    </h3>
+                    <div className="flex items-center justify-center gap-8 h-48">
+                      <div className="text-center group flex-1 bg-zinc-50 p-4 rounded-sm border border-zinc-200 hover:border-black transition-colors">
+                        <Briefcase size={28} className="text-zinc-400 mb-3 mx-auto" />
+                        <p className="text-4xl font-black text-black">{reportes.ordenesAbiertas}</p>
+                        <p className="text-xs font-bold text-zinc-500 uppercase tracking-wider mt-2">Abiertas</p>
+                      </div>
+                      <div className="text-center group flex-1 bg-zinc-50 p-4 rounded-sm border border-zinc-200 hover:border-black transition-colors">
+                        <CheckCircle size={28} className="text-zinc-400 mb-3 mx-auto" />
+                        <p className="text-4xl font-black text-black">{reportes.ordenesCerradas}</p>
+                        <p className="text-xs font-bold text-zinc-500 uppercase tracking-wider mt-2">Cerradas</p>
+                      </div>
+                    </div>
+                  </div>
+
                   {/* Horarios de Ingreso */}
                   <div className="bg-white p-6 rounded-sm shadow-sm border border-zinc-200">
                     <h3 className="text-sm font-bold text-black uppercase tracking-wide mb-6 border-b border-zinc-100 pb-3 flex items-center gap-2">
@@ -1687,6 +1826,27 @@ export default function App() {
                         <p className="text-[10px] uppercase font-bold text-zinc-500 tracking-wide mt-2">Fin de Semana</p>
                         <p className="text-[10px] text-zinc-400 mt-1">(Sábados y Domingos)</p>
                       </div>
+                    </div>
+                  </div>
+
+                  {/* Gráfico Barras Horizontales: Acciones */}
+                  <div className="bg-white p-6 rounded-sm shadow-sm border border-zinc-200">
+                    <h3 className="text-sm font-bold text-black uppercase tracking-wide mb-6 border-b border-zinc-100 pb-3">Embudo de Acciones</h3>
+                    <div className="space-y-5 max-h-[220px] overflow-y-auto pr-2 custom-scrollbar">
+                      {Object.entries(reportes.accionesCount).sort((a,b) => b[1] - a[1]).map(([accion, count]) => {
+                        const percent = reportes.total > 0 ? (count / reportes.total) * 100 : 0;
+                        return (
+                          <div key={accion} className="group">
+                            <div className="flex justify-between text-xs font-bold mb-1.5">
+                              <span className="text-zinc-700">{accion}</span>
+                              <span className="text-black">{count} <span className="text-zinc-400 text-[10px]">({percent.toFixed(0)}%)</span></span>
+                            </div>
+                            <div className="w-full bg-zinc-100 h-3 rounded-sm overflow-hidden">
+                              <div className="h-full rounded-sm bg-emerald-500 group-hover:bg-emerald-600 transition-colors" style={{ width: `${percent}%` }}></div>
+                            </div>
+                          </div>
+                        )
+                      })}
                     </div>
                   </div>
 
@@ -1781,12 +1941,6 @@ export default function App() {
                     className={`whitespace-nowrap flex-1 p-4 text-xs font-bold border-b-2 transition-colors ${adminTab === 'campanias' ? 'border-black text-black bg-white' : 'border-transparent text-zinc-400 hover:text-black'}`}
                   >
                     Campañas
-                  </button>
-                  <button 
-                    onClick={() => setAdminTab('sistema')}
-                    className={`whitespace-nowrap flex-1 p-4 text-xs font-bold border-b-2 transition-colors ${adminTab === 'sistema' ? 'border-black text-black bg-white' : 'border-transparent text-zinc-400 hover:text-black'}`}
-                  >
-                    Sistema
                   </button>
                 </div>
                 
@@ -1930,52 +2084,6 @@ export default function App() {
                   </div>
                 )}
 
-                {adminTab === 'sistema' && (
-                  <div className="animate-in fade-in space-y-8">
-                    <div className="space-y-3">
-                      <h3 className="text-xs font-black uppercase tracking-widest border-b border-zinc-200 pb-2 flex items-center gap-2">
-                         <Database size={14} /> Gestión de Datos y Configuración
-                      </h3>
-                      <p className="text-sm text-zinc-500 leading-relaxed mb-4">
-                        Al hacer clic en "Guardar Arquitectura", se guardarán las URLs y se enviará la configuración actual de las listas a SharePoint.
-                      </p>
-                      
-                      <div>
-                        <label className="block text-[10px] font-bold text-black uppercase mb-1">URL_DATOS (CRUD Leads)</label>
-                        <input 
-                          type="url" name="urlDatos" value={paConfig.urlDatos} onChange={handleConfigChange}
-                          className="w-full rounded-sm border-zinc-300 border p-3 focus:ring-1 focus:ring-black outline-none font-mono text-xs bg-zinc-50 focus:bg-white" 
-                          placeholder="Manejará el CRUD dependiendo del parámetro 'tipo'"
-                        />
-                      </div>
-
-                      <div className="pt-1">
-                        <label className="block text-[10px] font-bold text-black uppercase mb-1">URL_CONFIG (Gestionar Listas)</label>
-                        <input 
-                          type="url" name="urlConfig" value={paConfig.urlConfig} onChange={handleConfigChange}
-                          placeholder="https://prod-12.powerautomate.com/... (Lee y Escribe Listas)" 
-                          className="w-full rounded-sm border-zinc-300 border p-3 focus:ring-1 focus:ring-black outline-none font-mono text-xs bg-zinc-50 focus:bg-white mb-2" 
-                        />
-                      </div>
-
-                      <div className="flex items-center gap-4 pt-4">
-                        <button 
-                          onClick={handleSaveConfig}
-                          disabled={isSyncingConfig}
-                          className="bg-black hover:bg-zinc-800 disabled:bg-zinc-400 text-white px-8 py-3 rounded-sm font-bold text-sm transition-colors flex items-center gap-2 shadow-sm"
-                        >
-                          {isSyncingConfig ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />}
-                          {isSyncingConfig ? 'Guardando y Sincronizando...' : 'Guardar Arquitectura'}
-                        </button>
-                        {saveConfigSuccess && (
-                          <span className="text-sm font-bold text-emerald-600 flex items-center gap-1 animate-in fade-in">
-                            <CheckCircle size={16} /> ¡Sincronizado con éxito!
-                          </span>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                )}
               </div>
             </div>
           </div>
@@ -1984,4 +2092,38 @@ export default function App() {
       </div>
     </div>
   );
+}
+
+// ============================================================================
+// PUNTO DE ENTRADA Y ENVOLTORIO PRINCIPAL
+// ============================================================================
+export default function App() {
+  const [isInitialized, setIsInitialized] = useState(false);
+
+  useEffect(() => {
+    // Esperamos a que MSAL (o el Mock) se inicialice correctamente antes de renderizar
+    msalInstance.initialize().then(() => {
+      setIsInitialized(true);
+    });
+  }, []);
+
+  if (!isInitialized) {
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center bg-zinc-50">
+        <Loader2 size={32} className="animate-spin text-zinc-400 mb-4" />
+        <p className="text-sm font-bold text-zinc-500 uppercase tracking-widest">Iniciando seguridad...</p>
+      </div>
+    );
+  }
+
+  return (
+    <MsalProvider instance={msalInstance}>
+      <AuthGuard />
+    </MsalProvider>
+  );
+}
+
+function AuthGuard() {
+  const isAuthenticated = useIsAuthenticated();
+  return isAuthenticated ? <MainApp /> : <PantallaLoginMS />;
 }
