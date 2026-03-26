@@ -9,29 +9,8 @@ import {
   LogIn, LogOut, UserX
 } from 'lucide-react';
 
-// ============================================================================
-// 🚀 IMPORTS REALES (DESCOMENTAR EN VERCEL)
-// ============================================================================
 import { PublicClientApplication } from '@azure/msal-browser';
 import { MsalProvider, useMsal, useIsAuthenticated } from '@azure/msal-react';
-
-const MsalContext = React.createContext();
-const MsalProvider = ({ children }) => {
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
-  const [accounts, setAccounts] = useState([]);
-  const instance = {
-    loginPopup: async () => { setIsAuthenticated(true); setAccounts([{ name: "Usuario Demo", username: "demo@empresa.com" }]); },
-    loginRedirect: async () => { setIsAuthenticated(true); setAccounts([{ name: "Usuario Demo", username: "demo@empresa.com" }]); },
-    logoutPopup: () => { setIsAuthenticated(false); setAccounts([]); },
-    initialize: async () => Promise.resolve()
-  };
-  return <MsalContext.Provider value={{ instance, accounts, isAuthenticated }}>{children}</MsalContext.Provider>;
-};
-const useMsal = () => React.useContext(MsalContext);
-const useIsAuthenticated = () => {
-  const context = React.useContext(MsalContext);
-  return context ? context.isAuthenticated : false;
-};
 
 // ============================================================================
 // OBTENCIÓN SEGURA DE VARIABLES DE ENTORNO
@@ -54,6 +33,7 @@ const getEnvVar = (envName, fallback = "") => {
 const AZURE_CLIENT_ID = getEnvVar('VITE_AZURE_CLIENT_ID');
 const AZURE_TENANT_ID = getEnvVar('VITE_AZURE_TENANT_ID');
 
+// Power Automate (Con URLs por defecto para la vista previa)
 const URL_DATOS = getEnvVar('VITE_PoAu_URL_EMBUDOCOM_DATOS');
 const URL_CONFIG = getEnvVar('VITE_PoAu_URL_EMBUDOCOM_CONFIG');
 
@@ -72,8 +52,8 @@ const msalConfig = {
   }
 };
 
-// const msalInstance = new PublicClientApplication(msalConfig);
-const msalInstance = { initialize: async () => Promise.resolve() };
+// ============================================================================
+const msalInstance = new PublicClientApplication(msalConfig);
 
 // ==========================================
 // ESQUEMA BASE VACÍO (PREVIENE ERROR 400 EN PA)
@@ -154,7 +134,7 @@ function PantallaLoginMS() {
 }
 
 // ==========================================
-// APLICACIÓN PRINCIPAL (PROTEGIDA)
+// APLICACIÓN PRINCIPAL
 // ==========================================
 function MainApp() {
   const { instance, accounts } = useMsal();
