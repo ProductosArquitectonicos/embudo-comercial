@@ -69,6 +69,7 @@ const getBasePayload = () => ({
   fecha_registro_sistema: ""
 });
 
+
 // ==========================================
 // COMPONENTE DE LOGIN
 // ==========================================
