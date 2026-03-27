@@ -6,14 +6,13 @@ import {
   TableProperties, FilePlus2, RefreshCw, Loader2, Database,
   BarChart3, Target, TrendingUp, CalendarX, Moon, Layers, Activity,
   Search, Filter, ChevronUp, ChevronDown, Terminal, Edit2, Megaphone, Globe, ExternalLink, Link as LinkIcon, Download,
-  LogIn, LogOut
+  LogIn, LogOut, UserX
 } from 'lucide-react';
 
-// ============================================================================
-// 🚀 IMPORTS REALES (DESCOMENTAR EN VERCEL)
-// ============================================================================
+
 import { PublicClientApplication } from '@azure/msal-browser';
 import { MsalProvider, useMsal, useIsAuthenticated } from '@azure/msal-react';
+
 
 // ============================================================================
 // OBTENCIÓN SEGURA DE VARIABLES DE ENTORNO
@@ -33,15 +32,12 @@ const getEnvVar = (envName, fallback = "") => {
 };
 
 // Azure AD
-const AZURE_CLIENT_ID = getEnvVar('VITE_AZURE_CLIENT_ID', '');
-const AZURE_TENANT_ID = getEnvVar('VITE_AZURE_TENANT_ID', 'common');
+const AZURE_CLIENT_ID = getEnvVar('VITE_AZURE_CLIENT_ID');
+const AZURE_TENANT_ID = getEnvVar('VITE_AZURE_TENANT_ID');
 
 // Power Automate (Con URLs por defecto para la vista previa)
-const URL_DATOS_DEFAULT = "https://default2dad2f4230e64fe8adc416a2300053.14.environment.api.powerplatform.com:443/powerautomate/automations/direct/workflows/b4faf61d50994a6a83f7d1f28e3d8c78/triggers/manual/paths/invoke?api-version=1&sp=%2Ftriggers%2Fmanual%2Frun&sv=1.0&sig=7yYU2eVMAaTyWfdIsKdg_40bQIHfr9JWNg01200Ncz8";
-const URL_CONFIG_DEFAULT = "https://default2dad2f4230e64fe8adc416a2300053.14.environment.api.powerplatform.com:443/powerautomate/automations/direct/workflows/c3760089aa194bffab0b4997b56ed1d1/triggers/manual/paths/invoke?api-version=1&sp=%2Ftriggers%2Fmanual%2Frun&sv=1.0&sig=lfGu8reb8dGM-e1OCf5oXPW_QOwDFqw8X8YZ5b6p1zM";
-
-const URL_DATOS = getEnvVar('VITE_PoAu_URL_EMBUDOCOM_DATOS', URL_DATOS_DEFAULT);
-const URL_CONFIG = getEnvVar('VITE_PoAu_URL_EMBUDOCOM_CONFIG', URL_CONFIG_DEFAULT);
+const URL_DATOS = getEnvVar('VITE_PoAu_URL_EMBUDOCOM_DATOS');
+const URL_CONFIG = getEnvVar('VITE_PoAu_URL_EMBUDOCOM_CONFIG');
 
 // ============================================================================
 // CONFIGURACIÓN DE MICROSOFT AZURE AD (ENTRA ID)
@@ -986,23 +982,40 @@ function MainApp() {
     const total = itemsForReports.length;
     if (total === 0) return null;
 
-    let potenciales = 0, calificados = 0, noCalificados = 0, ventasCerradas = 0;
+    let potenciales = 0, calificados = 0, noCalificados = 0, ventasCerradas = 0, totalPerdidos = 0;
     let organicos = 0, pauta = 0, finDeSemana = 0, fueraHorario = 0;
     let ordenesAbiertas = 0, ordenesCerradas = 0;
     const calificacionCount = {};
     const lineasCount = {};
     const accionesCount = {};
+    const rendimientoAsesores = {};
 
     itemsForReports.forEach(lead => {
       const calif = lead.calificacion_lead || 'Por evaluar';
       calificacionCount[calif] = (calificacionCount[calif] || 0) + 1;
       
-      if (calif === 'Caliente' || calif === 'Tibio') { potenciales++; calificados++; } else { noCalificados++; }
+      const asesorName = lead.asesor || 'Sin asignar';
+      if (!rendimientoAsesores[asesorName]) {
+        rendimientoAsesores[asesorName] = { asignados: 0, ventas: 0, perdidos: 0 };
+      }
+      rendimientoAsesores[asesorName].asignados++;
+
+      // Mantenemos a los tibios y calientes como calificados, pero SOLO calientes para potenciales clientes
+      if (calif === 'Caliente') { potenciales++; }
+      if (calif === 'Caliente' || calif === 'Tibio') { calificados++; } else { noCalificados++; }
       
-      if (lead.accion === 'Venta') ventasCerradas++;
+      if (lead.accion === 'Venta') {
+        ventasCerradas++;
+        rendimientoAsesores[asesorName].ventas++;
+      }
 
       if (lead.estado_orden === 'Cerrada') ordenesCerradas++;
       else if (lead.estado_orden === 'Abierta') ordenesAbiertas++;
+
+      if (lead.estado === 'Perdido') {
+        totalPerdidos++;
+        rendimientoAsesores[asesorName].perdidos++;
+      }
 
       const acc = lead.accion || 'Sin asignar';
       accionesCount[acc] = (accionesCount[acc] || 0) + 1;
@@ -1037,10 +1050,18 @@ function MainApp() {
 
     const efectividadPorcentaje = ((ventasCerradas / total) * 100).toFixed(1);
 
+    const rendimientoArray = Object.entries(rendimientoAsesores).map(([nombre, datos]) => {
+      return {
+        nombre,
+        ...datos,
+        efectividad: datos.asignados > 0 ? ((datos.ventas / datos.asignados) * 100).toFixed(1) : '0.0'
+      };
+    }).sort((a, b) => b.ventas - a.ventas); // Ordenamos de mayor a menor venta
+
     return {
-      total, potenciales, calificados, noCalificados, ventasCerradas, efectividadPorcentaje,
+      total, potenciales, calificados, noCalificados, ventasCerradas, totalPerdidos, efectividadPorcentaje,
       organicos, pauta, finDeSemana, fueraHorario, calificacionCount, lineasCount,
-      ordenesAbiertas, ordenesCerradas, accionesCount
+      ordenesAbiertas, ordenesCerradas, accionesCount, rendimientoArray
     };
   }, [savedLeads, filterMes, reportFilterCalificacion]);
 
@@ -1050,8 +1071,9 @@ function MainApp() {
     csvRows.push(['Metrica', 'Valor']);
     csvRows.push(['Total Leads', reportes.total]);
     csvRows.push(['Ventas', reportes.ventasCerradas]);
+    csvRows.push(['Leads Perdidos', reportes.totalPerdidos]);
     csvRows.push(['Efectividad (%)', reportes.efectividadPorcentaje]);
-    csvRows.push(['Potenciales (Tibio/Caliente)', reportes.potenciales]);
+    csvRows.push(['Potenciales (Calientes)', reportes.potenciales]);
     csvRows.push(['Calificados', reportes.calificados]);
     csvRows.push(['No Calificados', reportes.noCalificados]);
     csvRows.push(['Órdenes Abiertas', reportes.ordenesAbiertas]);
@@ -1072,6 +1094,12 @@ function MainApp() {
     csvRows.push([]);
     csvRows.push(['Lineas de Interes Solicitadas', 'Cantidad']);
     Object.entries(reportes.lineasCount).forEach(([k, v]) => csvRows.push([k, v]));
+
+    csvRows.push([]);
+    csvRows.push(['Análisis de Asesores', 'Asignados', 'Ventas', 'Perdidos', 'Efectividad (%)']);
+    reportes.rendimientoArray.forEach(a => {
+      csvRows.push([a.nombre, a.asignados, a.ventas, a.perdidos, a.efectividad]);
+    });
 
     const csvContent = csvRows.map(e => e.join(",")).join("\n");
     const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
@@ -1527,45 +1555,45 @@ function MainApp() {
               </div>
             </div>
             
-            <div className="overflow-x-auto w-full">
+            <div className="overflow-auto w-full max-h-[calc(100vh-240px)] min-h-[400px] custom-scrollbar">
               <table className="w-full text-left border-collapse min-w-[1600px]">
-                <thead>
+                <thead className="sticky top-0 z-20 shadow-md">
                   <tr className="bg-black text-white text-[10px] tracking-widest uppercase border-b border-black">
-                    <th className="p-4 font-bold cursor-pointer hover:bg-zinc-800 transition-colors group" onClick={() => requestSort('id')}>
+                    <th className="p-4 font-bold cursor-pointer hover:bg-zinc-800 transition-colors group bg-black" onClick={() => requestSort('id')}>
                       <div className="flex items-center gap-2">ID {sortConfig?.key === 'id' ? (sortConfig.direction === 'ascending' ? <ChevronUp size={14}/> : <ChevronDown size={14}/>) : <span className="opacity-0 group-hover:opacity-50 transition-opacity"><ChevronUp size={14}/></span>}</div>
                     </th>
-                    <th className="p-4 font-bold cursor-pointer hover:bg-zinc-800 transition-colors group" onClick={() => requestSort('titulo')}>
+                    <th className="p-4 font-bold cursor-pointer hover:bg-zinc-800 transition-colors group bg-black" onClick={() => requestSort('titulo')}>
                       <div className="flex items-center gap-2">Título / Nombre {sortConfig?.key === 'titulo' ? (sortConfig.direction === 'ascending' ? <ChevronUp size={14}/> : <ChevronDown size={14}/>) : <span className="opacity-0 group-hover:opacity-50 transition-opacity"><ChevronUp size={14}/></span>}</div>
                     </th>
-                    <th className="p-4 font-bold cursor-pointer hover:bg-zinc-800 transition-colors group" onClick={() => requestSort('fecha_ingreso')}>
+                    <th className="p-4 font-bold cursor-pointer hover:bg-zinc-800 transition-colors group bg-black" onClick={() => requestSort('fecha_ingreso')}>
                       <div className="flex items-center gap-2">Fecha Ingreso {sortConfig?.key === 'fecha_ingreso' ? (sortConfig.direction === 'ascending' ? <ChevronUp size={14}/> : <ChevronDown size={14}/>) : <span className="opacity-0 group-hover:opacity-50 transition-opacity"><ChevronUp size={14}/></span>}</div>
                     </th>
-                    <th className="p-4 font-bold cursor-pointer hover:bg-zinc-800 transition-colors group" onClick={() => requestSort('asesor')}>
+                    <th className="p-4 font-bold cursor-pointer hover:bg-zinc-800 transition-colors group bg-black" onClick={() => requestSort('asesor')}>
                       <div className="flex items-center gap-2">Asesor {sortConfig?.key === 'asesor' ? (sortConfig.direction === 'ascending' ? <ChevronUp size={14}/> : <ChevronDown size={14}/>) : <span className="opacity-0 group-hover:opacity-50 transition-opacity"><ChevronUp size={14}/></span>}</div>
                     </th>
-                    <th className="p-4 font-bold cursor-pointer hover:bg-zinc-800 transition-colors group" onClick={() => requestSort('linea_interes')}>
+                    <th className="p-4 font-bold cursor-pointer hover:bg-zinc-800 transition-colors group bg-black" onClick={() => requestSort('linea_interes')}>
                       <div className="flex items-center gap-2">Línea Interés {sortConfig?.key === 'linea_interes' ? (sortConfig.direction === 'ascending' ? <ChevronUp size={14}/> : <ChevronDown size={14}/>) : <span className="opacity-0 group-hover:opacity-50 transition-opacity"><ChevronUp size={14}/></span>}</div>
                     </th>
-                    <th className="p-4 font-bold cursor-pointer hover:bg-zinc-800 transition-colors group" onClick={() => requestSort('fuente_medio')}>
+                    <th className="p-4 font-bold cursor-pointer hover:bg-zinc-800 transition-colors group bg-black" onClick={() => requestSort('fuente_medio')}>
                       <div className="flex items-center gap-2">Fuente/Medio {sortConfig?.key === 'fuente_medio' ? (sortConfig.direction === 'ascending' ? <ChevronUp size={14}/> : <ChevronDown size={14}/>) : <span className="opacity-0 group-hover:opacity-50 transition-opacity"><ChevronUp size={14}/></span>}</div>
                     </th>
-                    <th className="p-4 font-bold cursor-pointer hover:bg-zinc-800 transition-colors group" onClick={() => requestSort('campania')}>
+                    <th className="p-4 font-bold cursor-pointer hover:bg-zinc-800 transition-colors group bg-black" onClick={() => requestSort('campania')}>
                       <div className="flex items-center gap-2">Campaña {sortConfig?.key === 'campania' ? (sortConfig.direction === 'ascending' ? <ChevronUp size={14}/> : <ChevronDown size={14}/>) : <span className="opacity-0 group-hover:opacity-50 transition-opacity"><ChevronUp size={14}/></span>}</div>
                     </th>
-                    <th className="p-4 font-bold cursor-pointer hover:bg-zinc-800 transition-colors group" onClick={() => requestSort('estado')}>
+                    <th className="p-4 font-bold cursor-pointer hover:bg-zinc-800 transition-colors group bg-black" onClick={() => requestSort('estado')}>
                       <div className="flex items-center gap-2">Estado {sortConfig?.key === 'estado' ? (sortConfig.direction === 'ascending' ? <ChevronUp size={14}/> : <ChevronDown size={14}/>) : <span className="opacity-0 group-hover:opacity-50 transition-opacity"><ChevronUp size={14}/></span>}</div>
                     </th>
-                    <th className="p-4 font-bold cursor-pointer hover:bg-zinc-800 transition-colors group" onClick={() => requestSort('calificacion_lead')}>
+                    <th className="p-4 font-bold cursor-pointer hover:bg-zinc-800 transition-colors group bg-black" onClick={() => requestSort('calificacion_lead')}>
                       <div className="flex items-center gap-2">Calificación {sortConfig?.key === 'calificacion_lead' ? (sortConfig.direction === 'ascending' ? <ChevronUp size={14}/> : <ChevronDown size={14}/>) : <span className="opacity-0 group-hover:opacity-50 transition-opacity"><ChevronUp size={14}/></span>}</div>
                     </th>
-                    <th className="p-4 font-bold">Notas</th>
-                    <th className="p-4 font-bold cursor-pointer hover:bg-zinc-800 transition-colors group" onClick={() => requestSort('estado_orden')}>
+                    <th className="p-4 font-bold bg-black">Notas</th>
+                    <th className="p-4 font-bold cursor-pointer hover:bg-zinc-800 transition-colors group bg-black" onClick={() => requestSort('estado_orden')}>
                       <div className="flex items-center gap-2">Estado Orden {sortConfig?.key === 'estado_orden' ? (sortConfig.direction === 'ascending' ? <ChevronUp size={14}/> : <ChevronDown size={14}/>) : <span className="opacity-0 group-hover:opacity-50 transition-opacity"><ChevronUp size={14}/></span>}</div>
                     </th>
-                    <th className="p-4 font-bold text-center cursor-pointer hover:bg-zinc-800 transition-colors group" onClick={() => requestSort('tiempo_respuesta_hrs')}>
+                    <th className="p-4 font-bold text-center cursor-pointer hover:bg-zinc-800 transition-colors group bg-black" onClick={() => requestSort('tiempo_respuesta_hrs')}>
                       <div className="flex items-center justify-center gap-2">T. Resp {sortConfig?.key === 'tiempo_respuesta_hrs' ? (sortConfig.direction === 'ascending' ? <ChevronUp size={14}/> : <ChevronDown size={14}/>) : <span className="opacity-0 group-hover:opacity-50 transition-opacity"><ChevronUp size={14}/></span>}</div>
                     </th>
-                    <th className="p-4 font-bold text-center">Adjuntos</th>
+                    <th className="p-4 font-bold text-center bg-black">Adjuntos</th>
                     <th className="p-4 font-bold text-center bg-zinc-900 border-l border-zinc-800">Acciones</th>
                   </tr>
                 </thead>
@@ -1811,7 +1839,7 @@ function MainApp() {
                     </div>
                     <div className="flex items-baseline gap-2">
                       <p className="text-4xl font-black text-black">{reportes.potenciales}</p>
-                      <span className="text-xs text-zinc-500 font-bold uppercase">Tibios/Calientes</span>
+                      <span className="text-xs text-zinc-500 font-bold uppercase">Calientes</span>
                     </div>
                   </div>
 
@@ -1956,6 +1984,61 @@ function MainApp() {
                         )
                       })}
                     </div>
+                  </div>
+
+                  {/* Métrica de Leads Perdidos reubicada */}
+                  <div className="bg-red-50 p-6 rounded-sm shadow-sm border border-red-100 flex flex-col justify-center items-center text-center group transition-colors hover:bg-red-100 min-h-[200px]">
+                    <UserX size={48} className="text-red-400 mb-4 group-hover:scale-110 transition-transform duration-300" />
+                    <h3 className="text-sm font-bold text-red-800 uppercase tracking-wide mb-2">Total Leads Perdidos</h3>
+                    <p className="text-6xl font-black text-red-600">{reportes.totalPerdidos}</p>
+                    <p className="text-xs text-red-500 mt-2 font-medium">En el periodo seleccionado</p>
+                  </div>
+
+                  {/* Métrica de Ventas Cerradas (Nueva) */}
+                  <div className="bg-emerald-50 p-6 rounded-sm shadow-sm border border-emerald-100 flex flex-col justify-center items-center text-center group transition-colors hover:bg-emerald-100 min-h-[200px]">
+                    <TrendingUp size={48} className="text-emerald-400 mb-4 group-hover:scale-110 transition-transform duration-300" />
+                    <h3 className="text-sm font-bold text-emerald-800 uppercase tracking-wide mb-2">Total Ventas Cerradas</h3>
+                    <p className="text-6xl font-black text-emerald-600">{reportes.ventasCerradas}</p>
+                    <p className="text-xs text-emerald-500 mt-2 font-medium">En el periodo seleccionado</p>
+                  </div>
+                </div>
+
+                {/* Análisis de Rendimiento por Asesor (Tabla Completa) */}
+                <div className="bg-white rounded-sm shadow-sm border border-zinc-200 overflow-hidden mt-6">
+                  <div className="p-6 border-b border-zinc-100 bg-zinc-50">
+                    <h3 className="text-sm font-bold text-black uppercase tracking-wide flex items-center gap-2">
+                      <Briefcase size={18} className="text-black" /> Análisis de Rendimiento por Asesor
+                    </h3>
+                  </div>
+                  <div className="overflow-x-auto w-full">
+                    <table className="w-full text-left border-collapse min-w-[600px]">
+                      <thead>
+                        <tr className="bg-white text-zinc-500 text-[10px] tracking-widest uppercase border-b border-zinc-200">
+                          <th className="p-4 font-bold">Nombre del Asesor</th>
+                          <th className="p-4 font-bold text-center border-l border-zinc-100">Leads Asignados</th>
+                          <th className="p-4 font-bold text-center border-l border-zinc-100 text-emerald-600">Ventas Cerradas</th>
+                          <th className="p-4 font-bold text-center border-l border-zinc-100 text-red-500">Leads Perdidos</th>
+                          <th className="p-4 font-bold text-center border-l border-zinc-100 text-black bg-zinc-50">% Efectividad</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-zinc-100 text-sm">
+                        {reportes.rendimientoArray.length === 0 ? (
+                          <tr>
+                            <td colSpan="5" className="p-8 text-center text-zinc-500 text-xs">No hay datos de asesores en el periodo seleccionado.</td>
+                          </tr>
+                        ) : (
+                          reportes.rendimientoArray.map((asesor, index) => (
+                            <tr key={asesor.nombre || index} className="hover:bg-zinc-50 transition-colors group text-zinc-700">
+                              <td className="p-4 font-bold text-black">{asesor.nombre}</td>
+                              <td className="p-4 text-center font-medium">{asesor.asignados}</td>
+                              <td className="p-4 text-center font-bold text-emerald-600 bg-emerald-50/30">{asesor.ventas}</td>
+                              <td className="p-4 text-center font-bold text-red-500 bg-red-50/30">{asesor.perdidos}</td>
+                              <td className="p-4 text-center font-black text-black bg-zinc-50 group-hover:bg-zinc-100 transition-colors border-l border-zinc-100">{asesor.efectividad}%</td>
+                            </tr>
+                          ))
+                        )}
+                      </tbody>
+                    </table>
                   </div>
                 </div>
               </>
